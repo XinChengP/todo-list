@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 背景色引用颜色资源，系统深色模式自动切换（drawable-night 无需单独维护） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/card_bg" />
+    <corners android:radius="18dp" />
+</shape>

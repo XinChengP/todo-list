@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2x2 卡片（荣耀标准规格 152x152dp）。
+     MagicOS 卡片选择器按 Provider 区分尺寸：每种尺寸一个 Provider。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="140dp"
+    android:minHeight="140dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/todo_widget"
+    android:description="@string/widget_desc"
+    android:widgetCategory="home_screen" />

@@ -1,0 +1,20 @@
+{
+  "name": "todo-sync-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "todo-db",
+      "database_id": "9b55427e-d432-4617-a6d5-1e07b584bd73"
+    }
+  ],
+
+  // 自定义域名：todoapi.example.com（DNS 已托管在 Cloudflare，证书自动签发）
+  "routes": [
+    { "pattern": "todoapi.example.com", "custom_domain": true }
+  ]
+}

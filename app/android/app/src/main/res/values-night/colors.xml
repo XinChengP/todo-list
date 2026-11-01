@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式卡片配色 -->
+    <color name="card_bg">#F0161A22</color>
+    <color name="widget_title">#FFFFFFFF</color>
+    <color name="count_text">#73FFFFFF</color>
+    <color name="accent">#FF66CCFF</color>
+    <color name="add_text">#FF102030</color>
+    <color name="pill_bg">#22FFFFFF</color>
+    <color name="pill_text">#F2FFFFFF</color>
+    <color name="circle_mark">#59FFFFFF</color>
+    <color name="done_text">#73FFFFFF</color>
+    <color name="meta_urgent">#FFFF6B6B</color>
+</resources>

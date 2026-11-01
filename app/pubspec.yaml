@@ -1,0 +1,55 @@
+name: todo_app
+description: "任务清单：Windows / Android 双端，字段级 LWW 同步。"
+publish_to: 'none'
+
+version: 1.0.16+17
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  drift: 2.35.2
+  drift_flutter: ^0.3.1
+  flutter_riverpod: ^2.6.1
+  uuid: ^4.6.0
+  intl: ^0.20.3
+  http: ^1.6.0
+  home_widget: ^0.10.0
+  desktop_multi_window: ^0.3.1
+  window_manager: ^0.5.2
+  ffi: ^2.2.0
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  tray_manager: ^0.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: 2.35.2
+  build_runner: ^2.17.1
+  flutter_launcher_icons: 0.14.3
+
+dependency_overrides:
+  # Flutter 3.41.2 钉 meta 1.17.0，而新版 analyzer/drift_dev 生态需要更高版本。
+  # meta 是纯注解包、历史只增不删，强制升版本对 SDK 无害。待升级 Flutter SDK 后移除。
+  meta: ^1.19.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/tray_icon.ico
+
+# 图标生成（dart run flutter_launcher_icons）
+flutter_launcher_icons:
+  image_path: "assets/icon/icon_master.png"
+  adaptive_icon_background: "assets/icon/icon_bg.png"
+  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  android: true
+  windows:
+    generate: true
+    image_path: "assets/icon/icon_master.png"
+    icon_size: 256
