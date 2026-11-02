@@ -22,6 +22,7 @@ import '../repo/task_repository.dart';
 import '../widget_bridge.dart';
 import 'edit_task_dialog.dart';
 import 'format.dart' show dueLabel;
+import 'help_dialog.dart';
 import 'manage_lists_dialog.dart';
 import 'settings_dialog.dart';
 import 'task_tile.dart';
@@ -440,6 +441,11 @@ class _HomePageState extends ConsumerState<HomePage>
             },
           ),
           IconButton(
+            onPressed: () => showHelpDialog(context),
+            tooltip: '使用说明',
+            icon: const Icon(Icons.help_outline),
+          ),
+          IconButton(
             onPressed: _openSettings,
             tooltip: '同步设置',
             icon: const Icon(Icons.settings_outlined),
@@ -655,7 +661,7 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
           TextField(
             controller: _controller,
             decoration: InputDecoration(
-              hintText: '添加任务，支持「明天18点 !高 #家务 每周」',
+              hintText: '添加任务吧，防止又双叒叕忘了awa',
               prefixIcon: const Icon(Icons.add_task),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.send),
