@@ -15,10 +15,14 @@ import 'package:window_manager/window_manager.dart';
 
 import '../db/database.dart' show Task;
 import '../providers.dart';
+import '../repo/quick_add.dart';
+import '../repo/repeat.dart';
+import '../repo/task_filters.dart';
 import '../repo/task_repository.dart';
 import '../widget_bridge.dart';
 import 'edit_task_dialog.dart';
 import 'format.dart' show dueLabel;
+import 'manage_lists_dialog.dart';
 import 'settings_dialog.dart';
 import 'task_tile.dart';
 
@@ -38,6 +42,8 @@ class _HomePageState extends ConsumerState<HomePage>
   Timer? _floatNotifyDebounce;
   StreamSubscription<Uri?>? _widgetClickSub;
   DateTime? _lastResumeSync;
+  bool _searching = false;
+  final _searchController = TextEditingController();
 
   bool get _isWindows =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -170,6 +176,7 @@ class _HomePageState extends ConsumerState<HomePage>
       }();
     }
     _widgetClickSub?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -214,6 +221,75 @@ class _HomePageState extends ConsumerState<HomePage>
           duration: const Duration(seconds: 2),
         ),
       );
+    }
+  }
+
+  /// 切换搜索栏：关闭时清空关键字，避免"看不见但还在过滤"
+  void _toggleSearch() {
+    setState(() => _searching = !_searching);
+    if (!_searching) {
+      _searchController.clear();
+      ref.read(searchQueryProvider.notifier).state = '';
+    }
+  }
+
+  /// 快捷筛选 bottom sheet（可多选，与状态/清单/搜索叠加）
+  Future<void> _openQuickFilter() async {
+    final applied = await showModalBottomSheet<Set<QuickFilter>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        var picked = {...ref.read(quickFiltersProvider)};
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) => Padding(
+            padding: EdgeInsets.fromLTRB(
+                16, 0, 16, 16 + MediaQuery.paddingOf(ctx).bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('筛选', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final f in QuickFilter.values)
+                      FilterChip(
+                        label: Text(quickFilterLabel(f)),
+                        selected: picked.contains(f),
+                        onSelected: (on) => setSheetState(() {
+                          if (on) {
+                            picked.add(f);
+                          } else {
+                            picked.remove(f);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => setSheetState(() => picked = {}),
+                      child: const Text('清除全部'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, picked),
+                      child: const Text('应用'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (applied != null) {
+      ref.read(quickFiltersProvider.notifier).state = applied;
     }
   }
 
@@ -310,6 +386,26 @@ class _HomePageState extends ConsumerState<HomePage>
         automaticallyImplyLeading: false, // 隐藏误导性的返回箭头
         title: const Text('任务清单'),
         actions: [
+          IconButton(
+            onPressed: _toggleSearch,
+            tooltip: _searching ? '关闭搜索' : '搜索',
+            icon: Icon(_searching ? Icons.search_off : Icons.search),
+          ),
+          // 快捷筛选用角标显示生效条件数
+          Consumer(
+            builder: (context, ref, _) {
+              final n = ref.watch(quickFiltersProvider).length;
+              return IconButton(
+                onPressed: _openQuickFilter,
+                tooltip: '筛选${n > 0 ? '（$n 项生效）' : ''}',
+                icon: Badge(
+                  isLabelVisible: n > 0,
+                  label: Text('$n'),
+                  child: Icon(n > 0 ? Icons.filter_alt : Icons.filter_alt_outlined),
+                ),
+              );
+            },
+          ),
           if (_isWindows)
             IconButton(
               onPressed: _toggleFloatWindow,
@@ -353,14 +449,43 @@ class _HomePageState extends ConsumerState<HomePage>
       ),
       body: Column(
         children: [
+          if (_searching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '搜索标题或备注',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear, size: 20),
+                    tooltip: '清空',
+                    onPressed: () {
+                      _searchController.clear();
+                      ref.read(searchQueryProvider.notifier).state = '';
+                    },
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (v) =>
+                    ref.read(searchQueryProvider.notifier).state = v,
+              ),
+            ),
           const QuickAddBar(),
+          const ListChipsRow(),
           Expanded(
             child: tasksAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('加载失败：$e')),
               data: (tasks) => tasks.isEmpty
-                  ? const Center(
-                      child: Text('空空如也，在上方添加一个任务吧 ✨'),
+                  ? Center(
+                      child: Text(
+                        _searching || ref.watch(quickFiltersProvider).isNotEmpty
+                            ? '没有符合条件的任务'
+                            : '空空如也，在上方添加一个任务吧 ✨',
+                      ),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.only(bottom: 24),
@@ -399,7 +524,69 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 }
 
-/// 底部快速添加栏：输入标题回车即建任务
+/// 清单横向选择条：全部 / 各清单（带未完成角标）/ 管理入口
+class ListChipsRow extends ConsumerWidget {
+  const ListChipsRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listsAsync = ref.watch(allListsProvider);
+    final selected = ref.watch(listFilterProvider);
+    final counts = ref.watch(
+      allTasksProvider.select((v) => activeCountByList(v.valueOrNull ?? const [])),
+    );
+
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: ChoiceChip(
+              label: const Text('全部'),
+              selected: selected == null,
+              onSelected: (_) =>
+                  ref.read(listFilterProvider.notifier).state = null,
+            ),
+          ),
+          ...listsAsync.maybeWhen(
+            data: (lists) => [
+              for (final l in lists)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: ChoiceChip(
+                    label: Text(
+                      (counts[l.id] ?? 0) > 0
+                          ? '${l.name} · ${counts[l.id]}'
+                          : l.name,
+                    ),
+                    selected: selected == l.id,
+                    onSelected: (on) => ref
+                        .read(listFilterProvider.notifier)
+                        .state = on ? l.id : null,
+                  ),
+                ),
+            ],
+            orElse: () => const <Widget>[],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: ActionChip(
+              avatar: const Icon(Icons.add, size: 16),
+              label: const Text('清单'),
+              onPressed: () => showManageListsDialog(context, ref),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 底部快速添加栏：支持快捷语法
+///   `买牛奶 明天18点 !高 #家务 每周`
 class QuickAddBar extends ConsumerStatefulWidget {
   const QuickAddBar({super.key});
 
@@ -409,6 +596,7 @@ class QuickAddBar extends ConsumerStatefulWidget {
 
 class _QuickAddBarState extends ConsumerState<QuickAddBar> {
   final _controller = TextEditingController();
+  QuickAddResult _parsed = const QuickAddResult(title: '');
 
   @override
   void dispose() {
@@ -416,32 +604,126 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
     super.dispose();
   }
 
-  void _submit() {
+  void _onChanged(String text) {
+    final next = parseQuickAdd(text);
+    if (next.title != _parsed.title ||
+        next.dueAt != _parsed.dueAt ||
+        next.priority != _parsed.priority ||
+        next.listName != _parsed.listName ||
+        next.repeatUnit != _parsed.repeatUnit ||
+        next.repeatInterval != _parsed.repeatInterval) {
+      setState(() => _parsed = next);
+    }
+  }
+
+  Future<void> _submit() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    ref.read(taskRepoProvider).add(title: text);
+    final parsed = parseQuickAdd(text);
+    if (parsed.title.isEmpty) return; // 只有语法没有标题，忽略
+
+    final repo = ref.read(taskRepoProvider);
+    // 清单：优先 #名称，其次当前筛选的清单
+    String? listId = ref.read(listFilterProvider);
+    final name = parsed.listName;
+    if (name != null && name.isNotEmpty) {
+      final existing = await repo.findListByName(name);
+      listId = existing?.id ?? (await repo.addList(name)).id;
+    }
+
+    await repo.add(
+      title: parsed.title,
+      dueAt: parsed.dueAt,
+      priority: parsed.priority,
+      listId: listId,
+      repeatUnit: parsed.repeatUnit,
+      repeatInterval: parsed.repeatInterval,
+    );
     _controller.clear();
+    if (mounted) setState(() => _parsed = const QuickAddResult(title: ''));
   }
 
   @override
   Widget build(BuildContext context) {
-    // 顶部常驻：键盘物理上盖不到顶部输入框，任何机型/输入法都不遮挡
+    final theme = Theme.of(context);
+    final p = _parsed;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: TextField(
-        controller: _controller,
-        decoration: InputDecoration(
-          hintText: '添加任务，回车确认',
-          prefixIcon: const Icon(Icons.add_task),
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.send),
-            tooltip: '添加',
-            onPressed: _submit,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: InputDecoration(
+              hintText: '添加任务，支持「明天18点 !高 #家务 每周」',
+              prefixIcon: const Icon(Icons.add_task),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.send),
+                tooltip: '添加',
+                onPressed: _submit,
+              ),
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: _onChanged,
+            onSubmitted: (_) => _submit(),
+            textInputAction: TextInputAction.done,
           ),
-          border: const OutlineInputBorder(),
-        ),
-        onSubmitted: (_) => _submit(),
-        textInputAction: TextInputAction.done,
+          // 解析预览：让人在按下回车前就知道会被怎么解析
+          if (p.hasExtras)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (p.dueAt != null)
+                    _PreviewChip(Icons.event, dueLabel(p.dueAt!)),
+                  if (p.priority > 0)
+                    _PreviewChip(Icons.flag,
+                        ['', '低', '中', '高'][p.priority.clamp(0, 3)]),
+                  if (p.listName != null)
+                    _PreviewChip(Icons.folder_outlined, p.listName!),
+                  if (p.repeatUnit != null)
+                    _PreviewChip(Icons.repeat,
+                        repeatLabel(p.repeatUnit, p.repeatInterval)),
+                ],
+              ),
+            ),
+          if (p.hasExtras) const SizedBox(height: 2),
+          if (p.hasExtras)
+            Text('回车后标题为「${p.title}」',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewChip extends StatelessWidget {
+  const _PreviewChip(this.icon, this.text);
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: theme.colorScheme.onSecondaryContainer),
+          const SizedBox(width: 3),
+          Text(text,
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer)),
+        ],
       ),
     );
   }

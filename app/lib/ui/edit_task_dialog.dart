@@ -29,6 +29,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
   late int _priority = widget.task.priority;
   late String? _repeatUnit = widget.task.repeatUnit;
   late int _repeatInterval = widget.task.repeatInterval ?? 1;
+  late String? _listId = widget.task.listId;
 
   @override
   void dispose() {
@@ -66,6 +67,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     if (_repeatUnit != t.repeatUnit || _repeatInterval != (t.repeatInterval ?? 1)) {
       repo.setRepeat(t, _repeatUnit, _repeatInterval);
     }
+    if (_listId != t.listId) repo.setList(t, _listId);
     Navigator.pop(context);
   }
 
@@ -93,6 +95,31 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                 controller: _notes,
                 decoration: const InputDecoration(labelText: '备注'),
                 maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+              // 清单归属
+              Consumer(
+                builder: (context, ref, _) {
+                  final lists = ref.watch(allListsProvider).valueOrNull ?? const [];
+                  if (lists.isEmpty) return const SizedBox.shrink();
+                  return Row(
+                    children: [
+                      const Text('清单'),
+                      const SizedBox(width: 12),
+                      DropdownButton<String?>(
+                        value: lists.any((l) => l.id == _listId) ? _listId : null,
+                        items: [
+                          const DropdownMenuItem<String?>(
+                              value: null, child: Text('无')),
+                          for (final l in lists)
+                            DropdownMenuItem<String?>(
+                                value: l.id, child: Text(l.name)),
+                        ],
+                        onChanged: (v) => setState(() => _listId = v),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
               Row(

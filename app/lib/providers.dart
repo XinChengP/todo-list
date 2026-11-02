@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'db/database.dart';
+import 'repo/task_filters.dart';
 import 'repo/task_repository.dart';
 import 'sync/api_client.dart';
 import 'sync/settings_repository.dart';
@@ -19,6 +20,16 @@ final taskRepoProvider =
 
 final taskFilterProvider = StateProvider<TaskFilter>((ref) => TaskFilter.all);
 
+/// 清单筛选（null = 全部清单）
+final listFilterProvider = StateProvider<String?>((ref) => null);
+
+/// 搜索关键字（标题 + 备注）
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
+/// 快捷筛选条件（可多选，与状态/清单/搜索叠加）
+final quickFiltersProvider =
+    StateProvider<Set<QuickFilter>>((ref) => const <QuickFilter>{});
+
 /// 全量任务流：整个 App 唯一的数据库查询源。
 ///
 /// 界面筛选改成内存派生（下面两个 Provider）：
@@ -29,10 +40,26 @@ final allTasksProvider = StreamProvider<List<Task>>((ref) {
   return ref.watch(taskRepoProvider).watch();
 });
 
-/// 当前筛选下的列表（纯内存过滤，顺序沿用 sortTasks 的结果）
+/// 清单列表流（清单增删改也走同步）
+final allListsProvider = StreamProvider<List<TaskList>>((ref) {
+  return ref.watch(taskRepoProvider).watchLists();
+});
+
+/// 当前筛选下的列表：状态 → 清单 → 快捷条件 → 搜索，全在内存里组合
 final tasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
-  final filter = ref.watch(taskFilterProvider);
-  return ref.watch(allTasksProvider).whenData((rows) => filterTasks(rows, filter));
+  final status = ref.watch(taskFilterProvider);
+  final listId = ref.watch(listFilterProvider);
+  final query = ref.watch(searchQueryProvider);
+  final quick = ref.watch(quickFiltersProvider);
+  return ref.watch(allTasksProvider).whenData(
+        (rows) => applyTaskFilters(
+          rows,
+          status: status,
+          listId: listId,
+          query: query,
+          quick: quick,
+        ),
+      );
 });
 
 /// 全部未完成任务（不受界面筛选影响）——荣耀卡片数据源

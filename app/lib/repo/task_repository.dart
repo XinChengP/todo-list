@@ -200,6 +200,77 @@ class TaskRepository {
   Future<void> restore(Task t) =>
       _editField(t, 'deleted_at', (c) => c.copyWith(deletedAt: const Value<int?>(null)));
 
+  // ---- 清单 ----
+
+  /// 未删除的清单，按 sort_order、创建时间排序
+  Stream<List<TaskList>> watchLists() {
+    final q = _db.select(_db.taskLists)..where((l) => l.deletedAt.isNull());
+    q.orderBy([
+      (l) => OrderingTerm(expression: l.sortOrder),
+      (l) => OrderingTerm(expression: l.createdAt),
+    ]);
+    return q.watch();
+  }
+
+  Future<TaskList> addList(String name) async {
+    final now = nowMs();
+    // 排在末尾
+    final last = await (_db.selectOnly(_db.taskLists)
+          ..addColumns([_db.taskLists.sortOrder.max()]))
+        .map((r) => r.read(_db.taskLists.sortOrder.max()))
+        .getSingleOrNull();
+    final id = _uuid.v7();
+    await _db.into(_db.taskLists).insert(
+          TaskListsCompanion.insert(
+            id: id,
+            createdAt: now,
+            updatedAt: now,
+            name: Value(name),
+            sortOrder: Value((last ?? 0) + 1),
+            fieldTs: Value(FieldTs.empty
+                .withWrites({'name': now, 'sort_order': now})
+                .encode()),
+            dirty: const Value(true),
+          ),
+        );
+    return (await (_db.select(_db.taskLists)..where((l) => l.id.equals(id)))
+        .getSingle());
+  }
+
+  Future<void> renameList(TaskList l, String name) async {
+    final now = nowMs();
+    await (_db.update(_db.taskLists)..where((x) => x.id.equals(l.id))).write(
+      TaskListsCompanion(
+        name: Value(name),
+        fieldTs: Value(FieldTs.parse(l.fieldTs).withWrites({'name': now}).encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  /// 软删除清单（墓碑同步）。清单下的任务不连带删除，只是失去归属。
+  Future<void> deleteList(TaskList l) async {
+    final now = nowMs();
+    await (_db.update(_db.taskLists)..where((x) => x.id.equals(l.id))).write(
+      TaskListsCompanion(
+        deletedAt: Value(now),
+        fieldTs: Value(
+            FieldTs.parse(l.fieldTs).withWrites({'deleted_at': now}).encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  /// 按名字找清单（快捷添加里 #家务 自动匹配）
+  Future<TaskList?> findListByName(String name) {
+    final q = _db.select(_db.taskLists)
+      ..where((l) => l.deletedAt.isNull() & l.name.equals(name))
+      ..limit(1);
+    return q.getSingleOrNull();
+  }
+
   // ---- 内部 ----
 
   FieldTs _nextTs(Task t, Map<String, int> writes) => FieldTs.parse(t.fieldTs).withWrites(writes);
