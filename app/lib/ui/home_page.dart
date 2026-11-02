@@ -78,7 +78,7 @@ class _HomePageState extends ConsumerState<HomePage>
         try {
           final me = await WindowController.fromCurrentEngine();
           await me.setWindowMethodHandler((call) async {
-            if (call.method == 'refresh') ref.invalidate(tasksProvider);
+            if (call.method == 'refresh') ref.invalidate(allTasksProvider);
             return null;
           });
         } catch (_) {
@@ -102,8 +102,7 @@ class _HomePageState extends ConsumerState<HomePage>
         await ref
             .read(taskRepoProvider)
             .setCompleted(t, done: t.completedAt == null);
-        ref.invalidate(tasksProvider);
-        ref.invalidate(activeTasksProvider);
+        ref.invalidate(allTasksProvider);
         await ref.read(syncControllerProvider.notifier).run(auto: true);
       } catch (_) {}
     }();
@@ -172,7 +171,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void onWindowFocus() {
-    ref.invalidate(tasksProvider);
+    ref.invalidate(allTasksProvider);
   }
 
   @override
@@ -180,8 +179,7 @@ class _HomePageState extends ConsumerState<HomePage>
     if (state != AppLifecycleState.resumed) return;
     // 桌面圆点是在原生侧直接改库的，App 的查询流收不到通知：
     // 回到前台时重新查询一次，避免列表显示旧状态
-    ref.invalidate(tasksProvider);
-    ref.invalidate(activeTasksProvider);
+    ref.invalidate(allTasksProvider);
     // 顺带补一次同步（60 秒内只触发一次，避免频繁切 App 造成无谓请求）
     final now = DateTime.now();
     final last = _lastResumeSync;
@@ -263,7 +261,6 @@ class _HomePageState extends ConsumerState<HomePage>
     final filter = ref.watch(taskFilterProvider);
     final tasksAsync = ref.watch(tasksProvider);
     final repo = ref.watch(taskRepoProvider);
-    final syncState = ref.watch(syncControllerProvider);
 
     // 任务变化 → 更新荣耀桌面卡片快照 + 通知悬浮窗刷新
     ref.listen(activeTasksProvider, (_, next) {
@@ -291,24 +288,31 @@ class _HomePageState extends ConsumerState<HomePage>
               tooltip: '悬浮窗（桌面常驻）',
               icon: const Icon(Icons.picture_in_picture_alt_outlined),
             ),
-          IconButton(
-            onPressed: syncState.phase == SyncPhase.syncing ? null : _manualSync,
-            tooltip: switch (syncState.phase) {
-              SyncPhase.syncing => '同步中…',
-              SyncPhase.success => '已同步（点此再次同步）',
-              SyncPhase.error => '同步失败：${syncState.message ?? ''}',
-              SyncPhase.authError => syncState.message ?? '未配置同步',
-              SyncPhase.idle => '同步',
-            },
-            icon: switch (syncState.phase) {
-              SyncPhase.syncing =>
-                const SizedBox.square(
-                    dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-              SyncPhase.success => const Icon(Icons.cloud_done_outlined),
-              SyncPhase.error => Icon(Icons.cloud_off,
-                  color: Theme.of(context).colorScheme.error),
-              SyncPhase.authError => const Icon(Icons.cloud_off_outlined),
-              SyncPhase.idle => const Icon(Icons.sync),
+          // 同步状态只在按钮内部订阅：一次同步会切换 syncing→success 两次状态，
+          // 挂在 build 顶层会让整张任务列表跟着重建两遍
+          Consumer(
+            builder: (context, ref, _) {
+              final syncState = ref.watch(syncControllerProvider);
+              return IconButton(
+                onPressed: syncState.phase == SyncPhase.syncing ? null : _manualSync,
+                tooltip: switch (syncState.phase) {
+                  SyncPhase.syncing => '同步中…',
+                  SyncPhase.success => '已同步（点此再次同步）',
+                  SyncPhase.error => '同步失败：${syncState.message ?? ''}',
+                  SyncPhase.authError => syncState.message ?? '未配置同步',
+                  SyncPhase.idle => '同步',
+                },
+                icon: switch (syncState.phase) {
+                  SyncPhase.syncing => const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  SyncPhase.success => const Icon(Icons.cloud_done_outlined),
+                  SyncPhase.error => Icon(Icons.cloud_off,
+                      color: Theme.of(context).colorScheme.error),
+                  SyncPhase.authError => const Icon(Icons.cloud_off_outlined),
+                  SyncPhase.idle => const Icon(Icons.sync),
+                },
+              );
             },
           ),
           IconButton(

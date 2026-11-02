@@ -6,6 +6,25 @@ import '../db/sync_fields.dart';
 
 enum TaskFilter { all, active, done }
 
+/// 内存筛选（不查库）。入参已按 [TaskRepository.sortTasks] 排好序，
+/// 过滤不改变相对顺序，因此界面切换筛选时零 SQL 开销。
+List<Task> filterTasks(List<Task> rows, TaskFilter filter) {
+  switch (filter) {
+    case TaskFilter.all:
+      return rows;
+    case TaskFilter.active:
+      return [
+        for (final t in rows)
+          if (t.completedAt == null) t,
+      ];
+    case TaskFilter.done:
+      return [
+        for (final t in rows)
+          if (t.completedAt != null) t,
+      ];
+  }
+}
+
 /// 本地任务仓库。
 ///
 /// 所有写操作都按"字段级"记账：改了哪些可同步字段，就在 field_ts 里给哪些

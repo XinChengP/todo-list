@@ -19,15 +19,25 @@ final taskRepoProvider =
 
 final taskFilterProvider = StateProvider<TaskFilter>((ref) => TaskFilter.all);
 
-final tasksProvider = StreamProvider<List<Task>>((ref) {
-  return ref
-      .watch(taskRepoProvider)
-      .watch(filter: ref.watch(taskFilterProvider));
+/// 全量任务流：整个 App 唯一的数据库查询源。
+///
+/// 界面筛选改成内存派生（下面两个 Provider）：
+/// - 切「全部/进行中/已完成」不再重建查询流，只是重新过滤一遍内存列表
+/// - 同一张表只被一个 watch() 监听（原来 tasks + activeTasks 各查一遍，
+///   每次写入都会触发两次查询 + 两次排序）
+final allTasksProvider = StreamProvider<List<Task>>((ref) {
+  return ref.watch(taskRepoProvider).watch();
+});
+
+/// 当前筛选下的列表（纯内存过滤，顺序沿用 sortTasks 的结果）
+final tasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
+  final filter = ref.watch(taskFilterProvider);
+  return ref.watch(allTasksProvider).whenData((rows) => filterTasks(rows, filter));
 });
 
 /// 全部未完成任务（不受界面筛选影响）——荣耀卡片数据源
-final activeTasksProvider = StreamProvider<List<Task>>((ref) {
-  return ref.watch(taskRepoProvider).watch(filter: TaskFilter.active);
+final activeTasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
+  return ref.watch(allTasksProvider).whenData((rows) => filterTasks(rows, TaskFilter.active));
 });
 
 // ---------- 同步 ----------

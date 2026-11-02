@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:sqlite3/common.dart' show CommonDatabase;
 
 import 'tables.dart';
 
@@ -20,5 +21,19 @@ class AppDatabase extends _$AppDatabase {
     return (select(tasks)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
-  static QueryExecutor _open() => driftDatabase(name: 'todo_app');
+  static QueryExecutor _open() => driftDatabase(
+        name: 'todo_app',
+        native: const DriftNativeOptions(setup: _setupConnection),
+      );
+
+  /// 连接级 pragma（每条 SQLite 连接都要设一次）：
+  /// - WAL：桌面卡片的原生接收器（另一个连接）与 App 同时写库时不互相阻塞，
+  ///   写入 fsync 次数也更少（手机端更省电）
+  /// - busy_timeout：并发写时等待，而不是直接抛 "database is locked"
+  /// - synchronous=NORMAL：WAL 下仍然安全，写入更快（掉电最多丢最后一笔事务）
+  static void _setupConnection(CommonDatabase db) {
+    db.execute('PRAGMA journal_mode = WAL');
+    db.execute('PRAGMA busy_timeout = 3000');
+    db.execute('PRAGMA synchronous = NORMAL');
+  }
 }
