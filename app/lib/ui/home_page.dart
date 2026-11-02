@@ -18,6 +18,7 @@ import '../providers.dart';
 import '../repo/task_repository.dart';
 import '../widget_bridge.dart';
 import 'edit_task_dialog.dart';
+import 'format.dart' show dueLabel;
 import 'settings_dialog.dart';
 import 'task_tile.dart';
 
@@ -48,7 +49,10 @@ class _HomePageState extends ConsumerState<HomePage>
     super.initState();
     // 启动自动同步一次（未配置则静默跳过）
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(syncControllerProvider.notifier).run(auto: true);
+      if (!mounted) return;
+      ref.read(syncControllerProvider.notifier).run(auto: true);
+      // 桌面卡片勾选的周期任务只写了 completed_at，这里补推进到下一次
+      _reconcileRecurring();
     });
     if (_isAndroid) {
       WidgetsBinding.instance.addObserver(this);
@@ -180,12 +184,36 @@ class _HomePageState extends ConsumerState<HomePage>
     // 桌面圆点是在原生侧直接改库的，App 的查询流收不到通知：
     // 回到前台时重新查询一次，避免列表显示旧状态
     ref.invalidate(allTasksProvider);
+    // 桌面卡片勾选的周期任务只写了 completed_at，回前台时补推进
+    _reconcileRecurring();
     // 顺带补一次同步（60 秒内只触发一次，避免频繁切 App 造成无谓请求）
     final now = DateTime.now();
     final last = _lastResumeSync;
     if (last == null || now.difference(last) > const Duration(seconds: 60)) {
       _lastResumeSync = now;
       ref.read(syncControllerProvider.notifier).run(auto: true);
+    }
+  }
+
+  /// 周期任务补推进：原生接收器算不了"下一次"，由 App 侧统一处理。
+  Future<void> _reconcileRecurring() async {
+    try {
+      final n = await ref.read(taskRepoProvider).reconcileRecurring();
+      if (n > 0) ref.invalidate(allTasksProvider);
+    } catch (_) {}
+  }
+
+  /// 勾选任务。周期任务完成后会滚到下一次，这里弹一条提示（新日期立刻可见）。
+  Future<void> _toggle(TaskRepository repo, Task t, bool done) async {
+    final next = await repo.setCompleted(t, done: done);
+    if (!mounted) return;
+    if (next != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已完成，下次 ${dueLabel(next)}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -341,7 +369,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         final t = tasks[i];
                         return TaskTile(
                           task: t,
-                          onToggle: (done) => repo.setCompleted(t, done: done),
+                          onToggle: (done) => _toggle(repo, t, done),
                           onDelete: () => _deleteWithUndo(repo, t),
                           onTap: () => showEditTaskDialog(context, ref, t),
                         );

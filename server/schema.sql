@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority     INTEGER NOT NULL DEFAULT 0,
   completed_at INTEGER,
   deleted_at   INTEGER,
+  repeat_unit      TEXT,
+  repeat_interval  INTEGER,
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL,
   field_ts     TEXT NOT NULL DEFAULT '{}'

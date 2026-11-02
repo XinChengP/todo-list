@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../db/database.dart';
 import '../db/sync_fields.dart';
+import 'repeat.dart';
 
 enum TaskFilter { all, active, done }
 
@@ -76,14 +77,19 @@ class TaskRepository {
     int? dueAt,
     int priority = 0,
     String? listId,
+    String? repeatUnit,
+    int? repeatInterval,
   }) async {
     final now = nowMs();
+    final unit = RepeatUnit.isValid(repeatUnit) ? repeatUnit : null;
     final ts = FieldTs.empty.withWrites({
       'title': now,
       'notes': now,
       'priority': now,
       if (dueAt != null) 'due_at': now,
       if (listId != null) 'list_id': now,
+      if (unit != null) 'repeat_unit': now,
+      if (unit != null) 'repeat_interval': now,
     });
     final id = _uuid.v7();
     await _db.into(_db.tasks).insert(
@@ -96,6 +102,8 @@ class TaskRepository {
             dueAt: Value(dueAt),
             priority: Value(priority),
             listId: Value(listId),
+            repeatUnit: Value(unit),
+            repeatInterval: Value(unit == null ? null : _normInterval(repeatInterval)),
             fieldTs: Value(ts.encode()),
             dirty: const Value(true),
           ),
@@ -103,9 +111,34 @@ class TaskRepository {
     return (await _db.getTaskById(id))!;
   }
 
-  /// 勾选/取消完成。清除也是一次写入，同样盖时间戳。
-  Future<void> setCompleted(Task t, {required bool done}) async {
+  /// 勾选/取消完成。
+  ///
+  /// 周期任务完成时**原地滚到下一次**：`due_at` 推到下一次、`completed_at` 保持为空，
+  /// 不产生历史行（同一行循环使用，也就没有"重复行被多端各建一份"的竞态）。
+  /// 返回值是推进后的新 dueAt（非周期任务返回 null），界面可据此提示"下次 X"。
+  Future<int?> setCompleted(Task t, {required bool done}) async {
     final now = nowMs();
+    if (done && RepeatUnit.isValid(t.repeatUnit)) {
+      final next = nextDueAt(
+        fromMs: t.dueAt,
+        unit: t.repeatUnit,
+        interval: t.repeatInterval,
+        nowMs: now,
+      );
+      final fts = _nextTs(t, {'completed_at': now, 'due_at': now});
+      await _write(
+        t.id,
+        TasksCompanion(
+          completedAt: const Value<int?>(null),
+          dueAt: Value(next),
+          fieldTs: Value(fts.encode()),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+      return next;
+    }
+
     final fts = _nextTs(t, {'completed_at': now});
     await _write(t.id, TasksCompanion(
       completedAt: Value(done ? now : null),
@@ -113,7 +146,43 @@ class TaskRepository {
       updatedAt: Value(now),
       dirty: const Value(true),
     ));
+    return null;
   }
+
+  /// 设置/清除周期规则。[unit] 传 null 表示不重复。
+  Future<void> setRepeat(Task t, String? unit, int interval) async {
+    final now = nowMs();
+    final valid = RepeatUnit.isValid(unit) ? unit : null;
+    final fts = _nextTs(t, {'repeat_unit': now, 'repeat_interval': now});
+    await _write(
+      t.id,
+      TasksCompanion(
+        repeatUnit: Value(valid),
+        repeatInterval: Value(valid == null ? null : _normInterval(interval)),
+        fieldTs: Value(fts.encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  /// 补推进周期任务：桌面卡片的原生接收器只写 `completed_at`，算不了"下一次"。
+  /// App 启动 / 回前台 / 同步结束后调用，把「已完成但仍带周期规则」的任务滚到下一次。
+  /// 返回被推进的条数（0 表示无需处理）。
+  Future<int> reconcileRecurring() async {
+    final rows = await (_db.select(_db.tasks)
+          ..where((t) =>
+              t.deletedAt.isNull() &
+              t.completedAt.isNotNull() &
+              t.repeatUnit.isNotNull()))
+        .get();
+    for (final t in rows) {
+      await setCompleted(t, done: true);
+    }
+    return rows.length;
+  }
+
+  static int _normInterval(int? v) => (v == null || v < 1) ? 1 : (v > 99 ? 99 : v);
 
   Future<void> rename(Task t, String title) => _editField(t, 'title', (c) => c.copyWith(title: Value(title)));
   Future<void> setNotes(Task t, String notes) => _editField(t, 'notes', (c) => c.copyWith(notes: Value(notes)));

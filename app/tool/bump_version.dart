@@ -10,11 +10,13 @@
 // 会同步改写：
 //   pubspec.yaml            version: X.Y.Z+code
 //   lib/ui/settings_dialog.dart  const kAppVersion = 'X.Y.Z';
-// 并由 test/version_test.dart 兜底校验两处一致、code 符合公式。
+//   windows/runner/version.h     exe 文件版本号（与 Android 同源同表达）
+// 并由 test/version_test.dart 兜底校验三处一致、code 符合公式。
 import 'dart:io';
 
 const _pubspec = 'pubspec.yaml';
 const _settings = 'lib/ui/settings_dialog.dart';
+const _winVersionHeader = 'windows/runner/version.h';
 
 void main(List<String> args) {
   final current = _readCurrent();
@@ -51,6 +53,32 @@ void main(List<String> args) {
       pattern: RegExp(r"^const kAppVersion = '[^']*';", multiLine: true),
       replacement: "const kAppVersion = '$name';",
     ),
+    // Windows exe 的文件版本号：与 Android 的 versionName/versionCode 同源同表达
+    _Edit(
+      path: _winVersionHeader,
+      pattern: RegExp(r'^#define APP_VERSION_MAJOR \d+$', multiLine: true),
+      replacement: '#define APP_VERSION_MAJOR ${parts[0]}',
+    ),
+    _Edit(
+      path: _winVersionHeader,
+      pattern: RegExp(r'^#define APP_VERSION_MINOR \d+$', multiLine: true),
+      replacement: '#define APP_VERSION_MINOR ${parts[1]}',
+    ),
+    _Edit(
+      path: _winVersionHeader,
+      pattern: RegExp(r'^#define APP_VERSION_PATCH \d+$', multiLine: true),
+      replacement: '#define APP_VERSION_PATCH ${parts[2]}',
+    ),
+    _Edit(
+      path: _winVersionHeader,
+      pattern: RegExp(r'^#define APP_VERSION_BUILD \d+$', multiLine: true),
+      replacement: '#define APP_VERSION_BUILD $code',
+    ),
+    _Edit(
+      path: _winVersionHeader,
+      pattern: RegExp(r'^#define APP_VERSION_STRING "[^"]*"$', multiLine: true),
+      replacement: '#define APP_VERSION_STRING "$name.$code"',
+    ),
   ];
   for (final e in edits) {
     if (!e.pattern.hasMatch(File(e.path).readAsStringSync())) {
@@ -64,8 +92,10 @@ void main(List<String> args) {
   }
 
   stdout.writeln('版本: ${current.name}+${current.code}  ->  $name+$code');
+  stdout.writeln('已同步：pubspec.yaml / kAppVersion / windows/runner/version.h');
   stdout.writeln('下一步：flutter analyze && flutter test');
   stdout.writeln('构建：flutter build apk --release --target-platform android-arm64');
+  stdout.writeln('      flutter build windows --release');
 }
 
 class _Edit {

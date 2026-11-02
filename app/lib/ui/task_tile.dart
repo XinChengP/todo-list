@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../db/database.dart' show Task;
+import '../repo/repeat.dart';
 import 'format.dart';
 
 class TaskTile extends StatelessWidget {
@@ -60,7 +61,10 @@ class TaskTile extends StatelessWidget {
     final theme = Theme.of(context);
     final due = task.dueAt;
     final hasNotes = task.notes.isNotEmpty;
-    if (due == null && !hasNotes) return null;
+    final repeat = repeatLabel(task.repeatUnit, task.repeatInterval);
+    final hasRepeat = repeat.isNotEmpty;
+    if (due == null && !hasNotes && !hasRepeat) return null;
+    final muted = TextStyle(fontSize: 12, color: theme.colorScheme.outline);
     return Row(
       children: [
         if (due != null)
@@ -73,9 +77,16 @@ class TaskTile extends StatelessWidget {
                   : theme.colorScheme.outline,
             ),
           ),
-        if (due != null && hasNotes) const SizedBox(width: 8),
-        if (hasNotes)
+        if (due != null && (hasNotes || hasRepeat)) const SizedBox(width: 8),
+        if (hasRepeat) ...[
+          Icon(Icons.repeat, size: 14, color: theme.colorScheme.outline),
+          const SizedBox(width: 2),
+          Text(repeat, style: muted),
+        ],
+        if (hasNotes) ...[
+          if (due != null || hasRepeat) const SizedBox(width: 8),
           Icon(Icons.notes, size: 14, color: theme.colorScheme.outline),
+        ],
       ],
     );
   }

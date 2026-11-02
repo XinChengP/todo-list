@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'db/database.dart';
 import 'db/sync_fields.dart';
+import 'repo/repeat.dart';
 import 'ui/format.dart' show isOverdue;
 
 /// 荣耀/MagicOS 服务卡片的数据桥：
@@ -97,6 +98,8 @@ class WidgetBridge {
               'done': t.completedAt != null,
               'due': _dueLabel(t.dueAt),
               'priority': t.priority,
+              // 周期标签（"每天"/"每 3 周"），空串表示不重复
+              'repeat': repeatLabel(t.repeatUnit, t.repeatInterval),
               'overdue': t.dueAt != null &&
                   isOverdue(t.dueAt!) &&
                   t.completedAt == null,

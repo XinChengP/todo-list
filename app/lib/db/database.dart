@@ -14,7 +14,20 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  /// 迁移：v1 → v2 增加周期任务两列（repeat_unit / repeat_interval）。
+  /// 老库就地 ALTER，不动已有数据。
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(tasks, tasks.repeatUnit);
+            await m.addColumn(tasks, tasks.repeatInterval);
+          }
+        },
+      );
 
   /// 按 UUID 主键取单行（drift 对 TEXT 主键不生成 getTask 这类便捷方法）
   Future<Task?> getTaskById(String id) {

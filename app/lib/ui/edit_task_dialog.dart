@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart' show Task;
 import '../providers.dart';
+import '../repo/repeat.dart';
 import 'format.dart';
 
 Future<void> showEditTaskDialog(BuildContext context, WidgetRef ref, Task task) {
@@ -26,6 +27,8 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
   late final TextEditingController _notes = TextEditingController(text: widget.task.notes);
   late int? _dueAt = widget.task.dueAt;
   late int _priority = widget.task.priority;
+  late String? _repeatUnit = widget.task.repeatUnit;
+  late int _repeatInterval = widget.task.repeatInterval ?? 1;
 
   @override
   void dispose() {
@@ -60,6 +63,9 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     if (_notes.text != t.notes) repo.setNotes(t, _notes.text);
     if (_dueAt != t.dueAt) repo.setDue(t, _dueAt);
     if (_priority != t.priority) repo.setPriority(t, _priority);
+    if (_repeatUnit != t.repeatUnit || _repeatInterval != (t.repeatInterval ?? 1)) {
+      repo.setRepeat(t, _repeatUnit, _repeatInterval);
+    }
     Navigator.pop(context);
   }
 
@@ -102,6 +108,47 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                       tooltip: '清除截止日期',
                       onPressed: () => setState(() => _dueAt = null),
                     ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 周期：单位 + 间隔。选「不重复」时清除规则
+              Row(
+                children: [
+                  const Text('重复'),
+                  const SizedBox(width: 12),
+                  DropdownButton<String?>(
+                    value: _repeatUnit,
+                    items: const [
+                      DropdownMenuItem<String?>(value: null, child: Text('不重复')),
+                      DropdownMenuItem<String?>(value: RepeatUnit.day, child: Text('每天')),
+                      DropdownMenuItem<String?>(value: RepeatUnit.week, child: Text('每周')),
+                      DropdownMenuItem<String?>(value: RepeatUnit.month, child: Text('每月')),
+                      DropdownMenuItem<String?>(value: RepeatUnit.year, child: Text('每年')),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _repeatUnit = v;
+                      if (v != null && _repeatInterval < 1) _repeatInterval = 1;
+                    }),
+                  ),
+                  if (_repeatUnit != null) ...[
+                    const SizedBox(width: 8),
+                    const Text('每'),
+                    SizedBox(
+                      width: 56,
+                      child: TextFormField(
+                        initialValue: '$_repeatInterval',
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(isDense: true),
+                        onChanged: (s) {
+                          final n = int.tryParse(s);
+                          if (n != null && n >= 1 && n <= 99) _repeatInterval = n;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(repeatUnitName(_repeatUnit!)),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),

@@ -2,6 +2,8 @@
 //
 #pragma code_page(65001)
 #include "resource.h"
+// 版本号唯一来源（与 pubspec / Android 对齐，由 tool/bump_version.dart 生成）
+#include "version.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -60,17 +62,11 @@ IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 // Version
 //
 
-#if defined(FLUTTER_VERSION_MAJOR) && defined(FLUTTER_VERSION_MINOR) && defined(FLUTTER_VERSION_PATCH) && defined(FLUTTER_VERSION_BUILD)
-#define VERSION_AS_NUMBER FLUTTER_VERSION_MAJOR,FLUTTER_VERSION_MINOR,FLUTTER_VERSION_PATCH,FLUTTER_VERSION_BUILD
-#else
-#define VERSION_AS_NUMBER 1,0,0,0
-#endif
-
-#if defined(FLUTTER_VERSION)
-#define VERSION_AS_STRING FLUTTER_VERSION
-#else
-#define VERSION_AS_STRING "1.0.0"
-#endif
+// 版本号取自 version.h（由 tool/bump_version.dart 与 pubspec 同步生成）。
+// 这里不再用 FLUTTER_VERSION 宏：那个字符串是 "1.0.21+10021"（带 + 后缀），
+// 与 Android 的 versionName(1.0.21) / versionCode(10021) 表达不一致。
+#define VERSION_AS_NUMBER APP_VERSION_MAJOR,APP_VERSION_MINOR,APP_VERSION_PATCH,APP_VERSION_BUILD
+#define VERSION_AS_STRING APP_VERSION_STRING
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION VERSION_AS_NUMBER
@@ -89,11 +85,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "cn.xinchengp" "\0"
-            VALUE "FileDescription", "todo_app" "\0"
+            VALUE "CompanyName", "todo-list contributors" "\0"
+            VALUE "FileDescription", "任务清单 (todo-list)" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "todo_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 cn.xinchengp. All rights reserved." "\0"
+            VALUE "LegalCopyright", "MIT License" "\0"
             VALUE "OriginalFilename", "todo_app.exe" "\0"
             VALUE "ProductName", "todo_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

@@ -15,6 +15,8 @@ const kTaskFields = [
   'priority',
   'completed_at',
   'deleted_at',
+  'repeat_unit',
+  'repeat_interval',
 ];
 const kListFields = ['name', 'sort_order', 'deleted_at'];
 
@@ -43,6 +45,8 @@ Object? _localValue(Task t, String f) => switch (f) {
       'priority' => t.priority,
       'completed_at' => t.completedAt,
       'deleted_at' => t.deletedAt,
+      'repeat_unit' => t.repeatUnit,
+      'repeat_interval' => t.repeatInterval,
       _ => null,
     };
 
@@ -99,6 +103,8 @@ TasksCompanion applyTaskField(TasksCompanion c, String f, Object? v) =>
       'priority' => c.copyWith(priority: Value((v as num?)?.toInt() ?? 0)),
       'completed_at' => c.copyWith(completedAt: Value((v as num?)?.toInt())),
       'deleted_at' => c.copyWith(deletedAt: Value((v as num?)?.toInt())),
+      'repeat_unit' => c.copyWith(repeatUnit: Value(v as String?)),
+      'repeat_interval' => c.copyWith(repeatInterval: Value((v as num?)?.toInt())),
       _ => throw StateError('tasks 未知字段：$f'),
     };
 

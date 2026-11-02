@@ -22,6 +22,10 @@ class Tasks extends Table {
   IntColumn get priority => integer().withDefault(const Constant(0))();
   IntColumn get completedAt => integer().named('completed_at').nullable()();
   IntColumn get deletedAt => integer().named('deleted_at').nullable()();
+  /// 周期规则单位：null = 不重复；day / week / month / year
+  TextColumn get repeatUnit => text().named('repeat_unit').nullable()();
+  /// 周期间隔（≥1）。仅 repeatUnit 非空时有意义
+  IntColumn get repeatInterval => integer().named('repeat_interval').nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
   /// JSON：{ "字段名": 该字段最后一次写入的毫秒时间戳 }，与服务端 field_ts 同构

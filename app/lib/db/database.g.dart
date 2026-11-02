@@ -100,6 +100,28 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _repeatUnitMeta = const VerificationMeta(
+    'repeatUnit',
+  );
+  @override
+  late final GeneratedColumn<String> repeatUnit = GeneratedColumn<String>(
+    'repeat_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _repeatIntervalMeta = const VerificationMeta(
+    'repeatInterval',
+  );
+  @override
+  late final GeneratedColumn<int> repeatInterval = GeneratedColumn<int>(
+    'repeat_interval',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -158,6 +180,8 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     priority,
     completedAt,
     deletedAt,
+    repeatUnit,
+    repeatInterval,
     createdAt,
     updatedAt,
     fieldTs,
@@ -229,6 +253,21 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       context.handle(
         _deletedAtMeta,
         deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('repeat_unit')) {
+      context.handle(
+        _repeatUnitMeta,
+        repeatUnit.isAcceptableOrUnknown(data['repeat_unit']!, _repeatUnitMeta),
+      );
+    }
+    if (data.containsKey('repeat_interval')) {
+      context.handle(
+        _repeatIntervalMeta,
+        repeatInterval.isAcceptableOrUnknown(
+          data['repeat_interval']!,
+          _repeatIntervalMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -304,6 +343,14 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}deleted_at'],
       ),
+      repeatUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_unit'],
+      ),
+      repeatInterval: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}repeat_interval'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -339,6 +386,12 @@ class Task extends DataClass implements Insertable<Task> {
   final int priority;
   final int? completedAt;
   final int? deletedAt;
+
+  /// 周期规则单位：null = 不重复；day / week / month / year
+  final String? repeatUnit;
+
+  /// 周期间隔（≥1）。仅 repeatUnit 非空时有意义
+  final int? repeatInterval;
   final int createdAt;
   final int updatedAt;
 
@@ -357,6 +410,8 @@ class Task extends DataClass implements Insertable<Task> {
     required this.priority,
     this.completedAt,
     this.deletedAt,
+    this.repeatUnit,
+    this.repeatInterval,
     required this.createdAt,
     required this.updatedAt,
     required this.fieldTs,
@@ -383,6 +438,12 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || deletedAt != null) {
       map['deleted_at'] = Variable<int>(deletedAt);
+    }
+    if (!nullToAbsent || repeatUnit != null) {
+      map['repeat_unit'] = Variable<String>(repeatUnit);
+    }
+    if (!nullToAbsent || repeatInterval != null) {
+      map['repeat_interval'] = Variable<int>(repeatInterval);
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -412,6 +473,12 @@ class Task extends DataClass implements Insertable<Task> {
       deletedAt: deletedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(deletedAt),
+      repeatUnit: repeatUnit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatUnit),
+      repeatInterval: repeatInterval == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatInterval),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       fieldTs: Value(fieldTs),
@@ -434,6 +501,8 @@ class Task extends DataClass implements Insertable<Task> {
       priority: serializer.fromJson<int>(json['priority']),
       completedAt: serializer.fromJson<int?>(json['completedAt']),
       deletedAt: serializer.fromJson<int?>(json['deletedAt']),
+      repeatUnit: serializer.fromJson<String?>(json['repeatUnit']),
+      repeatInterval: serializer.fromJson<int?>(json['repeatInterval']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       fieldTs: serializer.fromJson<String>(json['fieldTs']),
@@ -453,6 +522,8 @@ class Task extends DataClass implements Insertable<Task> {
       'priority': serializer.toJson<int>(priority),
       'completedAt': serializer.toJson<int?>(completedAt),
       'deletedAt': serializer.toJson<int?>(deletedAt),
+      'repeatUnit': serializer.toJson<String?>(repeatUnit),
+      'repeatInterval': serializer.toJson<int?>(repeatInterval),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'fieldTs': serializer.toJson<String>(fieldTs),
@@ -470,6 +541,8 @@ class Task extends DataClass implements Insertable<Task> {
     int? priority,
     Value<int?> completedAt = const Value.absent(),
     Value<int?> deletedAt = const Value.absent(),
+    Value<String?> repeatUnit = const Value.absent(),
+    Value<int?> repeatInterval = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     String? fieldTs,
@@ -484,6 +557,10 @@ class Task extends DataClass implements Insertable<Task> {
     priority: priority ?? this.priority,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    repeatUnit: repeatUnit.present ? repeatUnit.value : this.repeatUnit,
+    repeatInterval: repeatInterval.present
+        ? repeatInterval.value
+        : this.repeatInterval,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     fieldTs: fieldTs ?? this.fieldTs,
@@ -502,6 +579,12 @@ class Task extends DataClass implements Insertable<Task> {
           ? data.completedAt.value
           : this.completedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      repeatUnit: data.repeatUnit.present
+          ? data.repeatUnit.value
+          : this.repeatUnit,
+      repeatInterval: data.repeatInterval.present
+          ? data.repeatInterval.value
+          : this.repeatInterval,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       fieldTs: data.fieldTs.present ? data.fieldTs.value : this.fieldTs,
@@ -521,6 +604,8 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('priority: $priority, ')
           ..write('completedAt: $completedAt, ')
           ..write('deletedAt: $deletedAt, ')
+          ..write('repeatUnit: $repeatUnit, ')
+          ..write('repeatInterval: $repeatInterval, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -540,6 +625,8 @@ class Task extends DataClass implements Insertable<Task> {
     priority,
     completedAt,
     deletedAt,
+    repeatUnit,
+    repeatInterval,
     createdAt,
     updatedAt,
     fieldTs,
@@ -558,6 +645,8 @@ class Task extends DataClass implements Insertable<Task> {
           other.priority == this.priority &&
           other.completedAt == this.completedAt &&
           other.deletedAt == this.deletedAt &&
+          other.repeatUnit == this.repeatUnit &&
+          other.repeatInterval == this.repeatInterval &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.fieldTs == this.fieldTs &&
@@ -574,6 +663,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<int> priority;
   final Value<int?> completedAt;
   final Value<int?> deletedAt;
+  final Value<String?> repeatUnit;
+  final Value<int?> repeatInterval;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<String> fieldTs;
@@ -589,6 +680,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.priority = const Value.absent(),
     this.completedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.repeatUnit = const Value.absent(),
+    this.repeatInterval = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.fieldTs = const Value.absent(),
@@ -605,6 +698,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.priority = const Value.absent(),
     this.completedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.repeatUnit = const Value.absent(),
+    this.repeatInterval = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.fieldTs = const Value.absent(),
@@ -623,6 +718,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<int>? priority,
     Expression<int>? completedAt,
     Expression<int>? deletedAt,
+    Expression<String>? repeatUnit,
+    Expression<int>? repeatInterval,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<String>? fieldTs,
@@ -639,6 +736,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (priority != null) 'priority': priority,
       if (completedAt != null) 'completed_at': completedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (repeatUnit != null) 'repeat_unit': repeatUnit,
+      if (repeatInterval != null) 'repeat_interval': repeatInterval,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (fieldTs != null) 'field_ts': fieldTs,
@@ -657,6 +756,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<int>? priority,
     Value<int?>? completedAt,
     Value<int?>? deletedAt,
+    Value<String?>? repeatUnit,
+    Value<int?>? repeatInterval,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<String>? fieldTs,
@@ -673,6 +774,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       priority: priority ?? this.priority,
       completedAt: completedAt ?? this.completedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      repeatUnit: repeatUnit ?? this.repeatUnit,
+      repeatInterval: repeatInterval ?? this.repeatInterval,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       fieldTs: fieldTs ?? this.fieldTs,
@@ -711,6 +814,12 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<int>(deletedAt.value);
     }
+    if (repeatUnit.present) {
+      map['repeat_unit'] = Variable<String>(repeatUnit.value);
+    }
+    if (repeatInterval.present) {
+      map['repeat_interval'] = Variable<int>(repeatInterval.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -741,6 +850,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('priority: $priority, ')
           ..write('completedAt: $completedAt, ')
           ..write('deletedAt: $deletedAt, ')
+          ..write('repeatUnit: $repeatUnit, ')
+          ..write('repeatInterval: $repeatInterval, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -1488,6 +1599,8 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<int> priority,
       Value<int?> completedAt,
       Value<int?> deletedAt,
+      Value<String?> repeatUnit,
+      Value<int?> repeatInterval,
       required int createdAt,
       required int updatedAt,
       Value<String> fieldTs,
@@ -1505,6 +1618,8 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<int> priority,
       Value<int?> completedAt,
       Value<int?> deletedAt,
+      Value<String?> repeatUnit,
+      Value<int?> repeatInterval,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<String> fieldTs,
@@ -1562,6 +1677,16 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<int> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatUnit => $composableBuilder(
+    column: $table.repeatUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get repeatInterval => $composableBuilder(
+    column: $table.repeatInterval,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1640,6 +1765,16 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get repeatUnit => $composableBuilder(
+    column: $table.repeatUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get repeatInterval => $composableBuilder(
+    column: $table.repeatInterval,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1699,6 +1834,16 @@ class $$TasksTableAnnotationComposer
   GeneratedColumn<int> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get repeatUnit => $composableBuilder(
+    column: $table.repeatUnit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get repeatInterval => $composableBuilder(
+    column: $table.repeatInterval,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -1749,6 +1894,8 @@ class $$TasksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<int?> completedAt = const Value.absent(),
                 Value<int?> deletedAt = const Value.absent(),
+                Value<String?> repeatUnit = const Value.absent(),
+                Value<int?> repeatInterval = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String> fieldTs = const Value.absent(),
@@ -1764,6 +1911,8 @@ class $$TasksTableTableManager
                 priority: priority,
                 completedAt: completedAt,
                 deletedAt: deletedAt,
+                repeatUnit: repeatUnit,
+                repeatInterval: repeatInterval,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,
@@ -1781,6 +1930,8 @@ class $$TasksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<int?> completedAt = const Value.absent(),
                 Value<int?> deletedAt = const Value.absent(),
+                Value<String?> repeatUnit = const Value.absent(),
+                Value<int?> repeatInterval = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<String> fieldTs = const Value.absent(),
@@ -1796,6 +1947,8 @@ class $$TasksTableTableManager
                 priority: priority,
                 completedAt: completedAt,
                 deletedAt: deletedAt,
+                repeatUnit: repeatUnit,
+                repeatInterval: repeatInterval,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,

@@ -64,6 +64,7 @@ open class TodoWidgetProvider : AppWidgetProvider() {
         val dueLabel: String?,
         val priority: Int,
         val overdue: Boolean,
+        val repeatLabel: String,
     )
 
     private data class Snapshot(val tasks: List<TaskInfo>, val activeCount: Int)
@@ -88,6 +89,7 @@ open class TodoWidgetProvider : AppWidgetProvider() {
                             dueLabel = if (t.isNull("due")) null else t.optString("due"),
                             priority = t.optInt("priority", 0),
                             overdue = t.optBoolean("overdue", false),
+                            repeatLabel = t.optString("repeat", ""),
                         ),
                     )
                 }
@@ -162,9 +164,10 @@ open class TodoWidgetProvider : AppWidgetProvider() {
                 },
             )
 
-            // 元信息：截止日期（逾期红色）+ 重要级
+            // 元信息：截止日期（逾期红色）+ 周期标记 + 重要级
             val metaParts = mutableListOf<String>()
             if (!task.dueLabel.isNullOrEmpty()) metaParts.add(task.dueLabel)
+            if (task.repeatLabel.isNotEmpty()) metaParts.add("↻ ${task.repeatLabel}")
             if (task.priority > 0) metaParts.add("P${task.priority}")
             views.setViewVisibility(metaIds[i], View.VISIBLE)
             views.setTextViewText(metaIds[i], metaParts.joinToString(" · "))

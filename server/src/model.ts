@@ -24,6 +24,10 @@ export const TABLES: Record<string, TableSpec> = {
       priority: { kind: 'int', notNull: true },
       completed_at: { kind: 'int' },
       deleted_at: { kind: 'int' },
+      // 周期任务：repeat_unit = day/week/month/year（null = 不重复），
+      // repeat_interval = 间隔（≥1）。客户端完成后原地滚到下一次。
+      repeat_unit: { kind: 'text', maxLen: 8 },
+      repeat_interval: { kind: 'int' },
     },
   },
   lists: {
