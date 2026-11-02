@@ -3,6 +3,19 @@
 三端（Android / Windows / 服务端）各有一套版本号，但 Android 的 `versionCode`
 必须严格单调递增，所以单独定规则。
 
+## 发布节奏（重要）
+
+**本地开发不为每个小版本推送或发布。**
+
+- 日常改动用 `dart run tool/bump_version.dart patch` 递增**本地**版本号，只为构建验证
+- 提交（`git commit`）留在本地累积，**不 push、不打 tag、不建 Release**
+- 只有明确说「发布」时，才执行 `git push` + `git tag` + `gh release create`
+  （发布前会先把本地攒的若干提交一次性推上去，按 MINOR 归并成一条 Release）
+- 建议：PATCH 累积在本地，凑够一批功能或修完一批问题再发；真正对外发布时
+  用 `dart run tool/bump_version.dart minor` 收一个 MINOR 版本
+- 例外：同步/数据类线上故障（例如"拉取漏数据"）需要客户端尽快拿到修复时，
+  可以只发一个 PATCH Hotfix —— 但也要先说一声再发
+
 ## 客户端（Flutter，Android + Windows 共用）
 
 | 项 | 规则 |
