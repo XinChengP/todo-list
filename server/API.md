@@ -110,6 +110,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 
 删除 = 推送 `{"deleted_at":{"v":<毫秒>,"at":<毫秒>}}`。
 
+**`updated_at` 的语义（重要）**：由服务器维护，等于**服务器实际接收这次写入的时刻**
+（单调不减），与客户端 `field_ts` 完全无关。客户端时钟快慢、或"创建后隔很久才推送"
+都不会影响其他端能否拉到——增量窗口只认服务器时间。
+（`field_ts` 仅用于字段级 LWW 判定。）
+
 ### GET /v1/export
 
 全量导出（含墓碑），备份/调试用。

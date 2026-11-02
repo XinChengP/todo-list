@@ -37,12 +37,6 @@ function parseTs(raw: unknown): FieldTs {
   }
 }
 
-function maxOf(map: FieldTs): number {
-  let m = 0
-  for (const v of Object.values(map)) if (v > m) m = v
-  return m
-}
-
 function validateValue(spec: { kind: 'text' | 'int'; maxLen?: number; notNull?: boolean }, v: unknown): string | number | null {
   if (spec.kind === 'text') {
     if (v == null) return spec.notNull ? '' : null
@@ -104,7 +98,14 @@ export async function pushTable(db: D1Database, table: string, rows: IncomingRow
       : Number.isFinite(createdNum) && createdNum > 0
         ? Math.floor(createdNum)
         : Date.now()
-    const updated_at = Math.max(existing ? Number(existing.updated_at) || 0 : created_at, maxOf(newTs), created_at)
+    // updated_at 是「服务器实际接收这次写入的时刻」，只前进不后退。
+    //
+    // 绝不能用客户端时间戳（maxOf(newTs)/created_at）来算：客户端时间戳是
+    // 字段 LWW 的判定依据（field_ts 负责），而 updated_at 决定增量拉取的窗口。
+    // 若用客户端时间，"在手机上创建任务"与"真正推送到服务器"之间有延迟时
+    // （断网稍后推、后台延迟上传都很常见），该行的 updated_at 会落在其他端
+    // 已推进的游标之前，导致那条记录**永久拉不到**（本次线上故障即为此）。
+    const updated_at = Math.max(Date.now(), existing ? Number(existing.updated_at) || 0 : 0)
 
     if (existing) {
       if (setCols.length === 0) {
