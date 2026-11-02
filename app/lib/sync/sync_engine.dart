@@ -21,6 +21,10 @@ class SyncEngine {
   static const _cursorKey = 'sync_cursor';
   static const _lastGoodEndpointKey = 'last_good_endpoint';
 
+  /// 服务端是否支持单次往返的 /v1/sync：
+  /// null/未知 = 先试一次；'1' = 支持；'0' = 老服务端，永久走 push+pull
+  static const _combinedKey = 'combined_sync';
+
   ApiClient? _cachedApi;
   String? _cachedSig;
 
@@ -47,8 +51,7 @@ class SyncEngine {
       api = _cachedApi!;
     }
     try {
-      await _push(api, timeout: timeout, retries: retries);
-      await _pull(api, timeout: timeout, retries: retries);
+      await _syncOnce(api, timeout: timeout, retries: retries);
       // 记住成功的端点，下次优先尝试（CF 国内可达性按时段波动）
       final good = api.lastGoodEndpoint;
       if (good != null && good != await _settings.get(_lastGoodEndpointKey)) {
@@ -62,6 +65,97 @@ class SyncEngine {
       }
       rethrow;
     }
+  }
+
+  /// 一次完整同步：服务端支持 /v1/sync 时只花一个往返，否则回退 push + pull。
+  Future<void> _syncOnce(
+    ApiClient api, {
+    required Duration timeout,
+    required int retries,
+  }) async {
+    if (await _settings.get(_combinedKey) != '0') {
+      if (await _tryCombined(api, timeout: timeout, retries: retries)) return;
+    }
+    await _push(api, timeout: timeout, retries: retries);
+    await _pull(api, timeout: timeout, retries: retries);
+  }
+
+  /// 单往返同步：推送 + 拉取合并成一次请求。
+  /// 返回 false 表示服务端不支持（已记住并切回老路径），true 表示本轮已完成。
+  Future<bool> _tryCombined(
+    ApiClient api, {
+    required Duration timeout,
+    required int retries,
+  }) async {
+    final dirtyTasks =
+        await (_db.select(_db.tasks)..where((t) => t.dirty.equals(true))).get();
+    final dirtyLists =
+        await (_db.select(_db.taskLists)..where((l) => l.dirty.equals(true))).get();
+    // 超过单批上限时交给分块 push 路径（正常使用不会触发）
+    if (dirtyTasks.length > _pushChunkSize || dirtyLists.length > _pushChunkSize) {
+      return false;
+    }
+
+    final cursor = int.tryParse(await _settings.get(_cursorKey) ?? '') ?? 0;
+    final Map<String, dynamic> resp;
+    try {
+      resp = await api.postJson(
+        '/v1/sync',
+        {
+          'since': cursor,
+          'tasks': [for (final t in dirtyTasks) taskToProtocol(t)],
+          'lists': [for (final l in dirtyLists) listToProtocol(l)],
+        },
+        timeout: timeout,
+        retries: retries,
+      );
+    } on SyncRequestException catch (e) {
+      // 404/405/501 = 老服务端没有这个端点：记住，以后不再试错
+      if (e.status == 404 || e.status == 405 || e.status == 501) {
+        await _settings.set(_combinedKey, '0');
+        return false;
+      }
+      rethrow;
+    }
+
+    if (resp['ok'] != true || resp['pull'] is! Map) {
+      await _settings.set(_combinedKey, '0');
+      return false;
+    }
+    await _settings.set(_combinedKey, '1');
+
+    // 推送裁决结果必须整体覆盖本地（与 /v1/sync/push 语义一致）
+    for (final row in _rows(resp, 'tasks')) {
+      await _overwriteTaskFromServer(row);
+    }
+    for (final row in _rows(resp, 'lists')) {
+      await _overwriteListFromServer(row);
+    }
+
+    // 拉取部分：先应用随响应带回的增量，再按 has_more 续拉
+    final pull = (resp['pull'] as Map).cast<String, dynamic>();
+    for (final row in _rows(pull, 'tasks')) {
+      await _mergeTask(row);
+    }
+    for (final row in _rows(pull, 'lists')) {
+      await _mergeList(row);
+    }
+    var next = ((pull['cursor'] as num?) ?? cursor).toInt();
+    var hasMore = pull['has_more'] == true;
+    while (hasMore) {
+      final more = await api.getJson('/v1/sync/pull?since=$next',
+          timeout: timeout, retries: retries);
+      for (final row in _rows(more, 'tasks')) {
+        await _mergeTask(row);
+      }
+      for (final row in _rows(more, 'lists')) {
+        await _mergeList(row);
+      }
+      next = ((more['cursor'] as num?) ?? next).toInt();
+      hasMore = more['has_more'] == true;
+    }
+    await _settings.set(_cursorKey, '$next');
+    return true;
   }
 
   // ---------- push ----------

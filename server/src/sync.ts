@@ -182,3 +182,30 @@ export async function exportAll(db: D1Database) {
   }
   return out
 }
+
+/**
+ * 一次往返完成「推送 + 拉取」，客户端省掉一个 RTT（弱网/移动网络下收益最明显）。
+ *
+ * 语义与分开调用完全一致，且两步都幂等：
+ *   1. 先按字段级 LWW 仲裁推送行，返回每行最终服务器状态（客户端必须覆盖本地）
+ *   2. 再按游标拉 [since, upper) 增量，返回 cursor / has_more
+ */
+export async function syncCombined(db: D1Database, body: Record<string, unknown>, since: number) {
+  const pushed = await pushAll(db, body)
+  const pulled = await pull(db, since)
+  return {
+    ok: true,
+    server_time: pulled.server_time,
+    // 推送裁决结果（与 /v1/sync/push 响应同构）
+    tasks: pushed.tasks ?? [],
+    lists: pushed.lists ?? [],
+    // 增量拉取结果（与 /v1/sync/pull 响应同构）
+    pull: {
+      tasks: pulled.tasks ?? [],
+      lists: pulled.lists ?? [],
+      cursor: pulled.cursor,
+      has_more: pulled.has_more === true,
+    },
+  }
+}
+

@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { exportAll, pull, pushAll } from './sync'
+import { exportAll, pull, pushAll, syncCombined } from './sync'
 import { HttpError, type Env } from './types'
 
 const app = new Hono<{ Bindings: Env }>()
@@ -29,7 +29,7 @@ app.get('/', (c) => {
   <p>服务器时间：${now}</p>
   <ul>
     <li><a href="/health">/health</a> — 健康检查（JSON）</li>
-    <li>/v1/sync/pull · /v1/sync/push · /v1/export — 同步接口（需令牌）</li>
+    <li>/v1/sync · /v1/sync/pull · /v1/sync/push · /v1/export — 同步接口（需令牌）</li>
   </ul>
   <p style="color:#667">手机浏览器打开本页能看到这个 ✅，说明该设备的网络可以连通服务。</p>
 </body></html>`)
@@ -37,7 +37,7 @@ app.get('/', (c) => {
 
 // 未匹配路径：JSON 404（保持 API 一致性），并提示可用路径
 app.notFound((c) =>
-  c.json({ ok: false, error: 'not found', hint: '可用路径：/health、/v1/sync/pull、/v1/sync/push、/v1/export' }, 404),
+  c.json({ ok: false, error: 'not found', hint: '可用路径：/health、/v1/sync、/v1/sync/pull、/v1/sync/push、/v1/export' }, 404),
 )
 
 /** 恒时比较，避免令牌校验的时序侧信道 */
@@ -69,6 +69,20 @@ app.post('/v1/sync/push', async (c) => {
   const body: unknown = await c.req.json().catch(() => null)
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, '请求体必须是 JSON 对象')
   return c.json(await pushAll(c.env.DB, body as Record<string, unknown>))
+})
+
+/**
+ * 一次往返完成推送 + 拉取（客户端首选路径）。
+ * 请求体：{ since, cursor?, tasks?, lists? }（字段与 /v1/sync/push 相同，另加 since）
+ * 响应：{ ok, server_time, tasks, lists, pull: { tasks, lists, cursor, has_more } }
+ */
+app.post('/v1/sync', async (c) => {
+  const body: unknown = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, '请求体必须是 JSON 对象')
+  const obj = body as Record<string, unknown>
+  const since = Number(obj.since ?? 0)
+  if (!Number.isFinite(since) || since < 0) throw new HttpError(400, 'since 必须是非负数字')
+  return c.json(await syncCombined(c.env.DB, obj, Math.floor(since)))
 })
 
 app.get('/v1/export', async (c) => c.json(await exportAll(c.env.DB)))

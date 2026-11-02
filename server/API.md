@@ -33,6 +33,37 @@
 
 ## 接口
 
+### POST /v1/sync （推荐：一次往返完成推送 + 拉取）
+
+弱网/移动网络下把两个往返压成一个，语义与 `/v1/sync/push` + `/v1/sync/pull` 完全一致
+（先按字段级 LWW 仲裁推送行，再按游标拉增量），两步都幂等。
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"since":<游标>, "tasks":[{"id":"<uuidv7>","fields":{"title":{"v":"新任务","at":1730000000000}}}], "lists":[]}' \
+  "https://todoapi.example.com/v1/sync"
+```
+
+响应：
+```json
+{
+  "ok": true,
+  "server_time": 1793548866400,
+  "tasks": [ /* 推送裁决结果，字段结构与 /v1/sync/push 响应相同 */ ],
+  "lists": [],
+  "pull": {
+    "tasks": [ /* 增量行 */ ],
+    "lists": [],
+    "cursor": 1793548866361,
+    "has_more": false
+  }
+}
+```
+
+- 客户端按 `tasks`/`lists`（顶层）覆盖本地 → 再合并 `pull.tasks`/`pull.lists` → 持久化 `pull.cursor`
+- `pull.has_more=true` 时继续用 `GET /v1/sync/pull?since=<pull.cursor>` 续拉
+- 老服务端没有该端点时返回 404，客户端会自动回退到 `push` + `pull` 并记住（不再重复探测）
+
 ### GET /health
 
 无鉴权。返回 `{"ok":true,"server_time":...}`，用于连通性探测。

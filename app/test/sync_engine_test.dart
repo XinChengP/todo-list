@@ -24,11 +24,14 @@ void main() {
   late SettingsRepository settings;
   late SyncEngine engine;
 
-  setUp(() {
+  setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = TaskRepository(db);
     settings = SettingsRepository(db);
     engine = SyncEngine(db, settings);
+    // 下面这批用例验证的是"老服务端"（无 /v1/sync 端点）的 push + pull 路径，
+    // 显式关掉单往返探测，保证请求序列稳定；单往返路径见文件末尾的 3 个用例。
+    await settings.set('combined_sync', '0');
   });
   tearDown(() async => db.close());
 
@@ -372,5 +375,146 @@ void main() {
     // 全部行 dirty 清零（服务器响应覆盖）
     final left = await (db.select(db.tasks)..where((x) => x.dirty.equals(true))).get();
     expect(left, isEmpty);
+  });
+
+  // ---------- 单往返 /v1/sync（新服务端） ----------
+
+  /// 一行"服务器裁决后"的完整字段（幂等、字段齐全，便于复用）
+  Map<String, Map<String, dynamic>> allFields({
+    String title = '标题',
+    int at = 3000,
+    int? deletedAt,
+  }) =>
+      {
+        'title': {'v': title, 'at': at},
+        'notes': {'v': '', 'at': at},
+        'priority': {'v': 0, 'at': at},
+        'list_id': {'v': null, 'at': 0},
+        'due_at': {'v': null, 'at': 0},
+        'remind_at': {'v': null, 'at': 0},
+        'completed_at': {'v': null, 'at': 0},
+        'deleted_at': {'v': deletedAt, 'at': deletedAt == null ? 0 : at},
+      };
+
+  test('单往返：只发一次 /v1/sync，推送裁决覆盖本地并落游标', () async {
+    await settings.set('combined_sync', '1');
+    final t = await repo.add(title: '本地标题');
+    final paths = <String>[];
+    final client = MockClient((req) async {
+      paths.add('${req.method} ${req.url.path}');
+      expect(req.url.path, '/v1/sync');
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      expect(body['since'], 0);
+      expect((body['tasks'] as List), hasLength(1));
+      return resp(
+        jsonEncode({
+          'ok': true,
+          'server_time': 5000,
+          // 推送裁决：服务器标题赢
+          'tasks': [serverRow(t.id, 4000, allFields(title: '服务器标题', at: 4000))],
+          'lists': [],
+          'pull': {
+            'tasks': [],
+            'lists': [],
+            'cursor': 4321,
+            'has_more': false,
+          },
+        }),
+        200,
+      );
+    });
+
+    await engine.sync(config, client: client);
+
+    expect(paths, ['POST /v1/sync'], reason: '单往返只应有一个请求');
+    final row = await db.getTaskById(t.id);
+    expect(row!.title, '服务器标题');
+    expect(row.dirty, isFalse);
+    expect(await settings.get('sync_cursor'), '4321');
+    expect(await settings.get('combined_sync'), '1');
+  });
+
+  test('老服务端：/v1/sync 返回 404 时回退 push+pull，并记住不再试', () async {
+    await settings.set('combined_sync', '1');
+    final t = await repo.add(title: '回退');
+    final paths = <String>[];
+    final client = MockClient((req) async {
+      paths.add('${req.method} ${req.url.path}');
+      if (req.url.path == '/v1/sync') {
+        return resp(jsonEncode({'ok': false, 'error': 'not found'}), 404);
+      }
+      if (req.url.path == '/v1/sync/push') {
+        return resp(
+          jsonEncode({
+            'ok': true,
+            'server_time': 1,
+            'tasks': [serverRow(t.id, 4000, allFields(title: '回退', at: 4000))],
+            'lists': [],
+          }),
+          200,
+        );
+      }
+      return resp(
+        jsonEncode(
+            {'ok': true, 'server_time': 2, 'cursor': 888, 'has_more': false, 'tasks': [], 'lists': []}),
+        200,
+      );
+    });
+
+    await engine.sync(config, client: client);
+
+    expect(paths, ['POST /v1/sync', 'POST /v1/sync/push', 'GET /v1/sync/pull']);
+    expect(await settings.get('combined_sync'), '0');
+    expect((await db.getTaskById(t.id))!.dirty, isFalse);
+
+    // 第二轮：已记住不支持，直接走老路径（此时没有 dirty 行，只剩一次 pull），
+    // 关键是 **不再** 出现 /v1/sync 试错请求
+    paths.clear();
+    await engine.sync(config, client: client);
+    expect(paths, ['GET /v1/sync/pull']);
+    expect(await settings.get('combined_sync'), '0');
+  });
+
+  test('单往返 + has_more：续拉走 /v1/sync/pull 并前移游标', () async {
+    await settings.set('combined_sync', '1');
+    var pullCalls = 0;
+    final client = MockClient((req) async {
+      if (req.url.path == '/v1/sync') {
+        return resp(
+          jsonEncode({
+            'ok': true,
+            'server_time': 10,
+            'tasks': [],
+            'lists': [],
+            'pull': {
+              'tasks': [serverRow('r1', 100, allFields(title: '第一页', at: 100))],
+              'lists': [],
+              'cursor': 500,
+              'has_more': true,
+            },
+          }),
+          200,
+        );
+      }
+      pullCalls++;
+      expect(req.url.queryParameters['since'], '500');
+      return resp(
+        jsonEncode({
+          'ok': true,
+          'cursor': 900,
+          'has_more': false,
+          'tasks': [serverRow('r2', 200, allFields(title: '第二页', at: 200))],
+          'lists': [],
+        }),
+        200,
+      );
+    });
+
+    await engine.sync(config, client: client);
+
+    expect(pullCalls, 1);
+    expect(await settings.get('sync_cursor'), '900');
+    expect((await db.getTaskById('r1'))!.title, '第一页');
+    expect((await db.getTaskById('r2'))!.title, '第二页');
   });
 }
