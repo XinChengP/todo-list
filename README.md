@@ -48,7 +48,11 @@ TMP=D:\AndroidDev\tmp   TEMP=D:\AndroidDev\tmp
 
 ## 构建
 
-- **Android**：`flutter build apk --release` → `build\app\outputs\flutter-apk\app-release.apk`（54.6MB，含三架构）
+版本号规范（versionName / versionCode 公式、发布流程）见 [VERSIONING.md](VERSIONING.md)；
+改版本只跑 `cd app && dart run tool/bump_version.dart 1.0.22`（或 `dart run tool/bump_version.dart patch`）。
+
+- **Android**：`flutter build apk --release --target-platform android-arm64`
+  → `build\app\outputs\flutter-apk\app-release.apk`（约 23MB，单架构，versionCode = pubspec 里的值，无 ABI 偏移）
   安装到手机后：打开 App → 右上角设置 → 确认服务器地址与令牌（令牌在 `server/.sync-token`）→ 即自动同步
 - **Windows**：先双击 `D:\AndroidDev\install-vs.bat` 装 VS Build Tools（唯一未完成的工具链，需点一次 UAC），
   然后 `flutter config --enable-windows-desktop`（默认已启用）+ `flutter run -d windows`
@@ -69,8 +73,9 @@ TMP=D:\AndroidDev\tmp   TEMP=D:\AndroidDev\tmp
 
 ## 已知权衡与可选优化（复审记录）
 
-- **APK 体积**：默认包含三架构（55.7MB）。只发自己手机可用
-  `flutter build apk --split-per-abi`，单架构包约 20MB
+- **APK 体积**：默认三架构通用包 55.7MB；日常用
+  `flutter build apk --release --target-platform android-arm64`，单架构约 23MB
+  且没有 ABI versionCode 偏移（不要用 `--split-per-abi`，见 VERSIONING.md）
 - **软删除墓碑永久保留**：多端离线语义要求墓碑不丢（离线一年的设备回来也不能复活已删任务）。
   行体积极小，个人规模无碍；若将来做 GC 必须同时保证所有设备都已同步过该时间点
 - **同步令牌明文存于本地 SQLite**：单机自用可接受；若担心 root 设备读取，可接

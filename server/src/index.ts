@@ -5,6 +5,13 @@ import { HttpError, type Env } from './types'
 
 const app = new Hono<{ Bindings: Env }>()
 
+/**
+ * 服务端版本：与客户端解耦，独立语义化。
+ * 每次 deploy 前 bump，部署后用 `curl /health` 核对——
+ * 靠这个字段才能确认"线上跑的到底是哪一版"（踩过这个坑）。
+ */
+const SERVER_VERSION = '1.2.0'
+
 // 原生 App 不受 CORS 约束，这里放开以便将来复用（鉴权由令牌兜底，无风险）
 app.use('*', cors())
 
@@ -15,7 +22,9 @@ app.onError((err, c) => {
 })
 
 // 健康检查无需鉴权（可用作域名绑定后的连通性探针）
-app.get('/health', (c) => c.json({ ok: true, server_time: Date.now() }))
+app.get('/health', (c) =>
+  c.json({ ok: true, version: SERVER_VERSION, server_time: Date.now() }),
+)
 
 // 根路径：浏览器直接打开域名时能看到的可读状态页（404 会让人误以为服务挂了）
 app.get('/', (c) => {
@@ -26,7 +35,7 @@ app.get('/', (c) => {
 <title>任务清单 · 同步服务</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:0 16px;color:#202a35">
   <h1>✅ 任务清单同步服务运行中</h1>
-  <p>服务器时间：${now}</p>
+  <p>服务器时间：${now}　版本：v${SERVER_VERSION}</p>
   <ul>
     <li><a href="/health">/health</a> — 健康检查（JSON）</li>
     <li>/v1/sync · /v1/sync/pull · /v1/sync/push · /v1/export — 同步接口（需令牌）</li>
