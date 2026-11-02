@@ -29,10 +29,14 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage>
-    with WindowListener, TrayListener {
+    with WindowListener, TrayListener, WidgetsBindingObserver {
+  /// 与 MainActivity 通信：消费掉卡片启动 Intent，避免重复执行
+  static const _intentChannel = MethodChannel('todo/widget_intent');
+
   WindowController? _floatController;
   Timer? _floatNotifyDebounce;
   StreamSubscription<Uri?>? _widgetClickSub;
+  DateTime? _lastResumeSync;
 
   bool get _isWindows =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -47,11 +51,19 @@ class _HomePageState extends ConsumerState<HomePage>
       if (mounted) ref.read(syncControllerProvider.notifier).run(auto: true);
     });
     if (_isAndroid) {
-      // 桌面卡片：点任务圆点 → 切换完成状态并静默同步
+      WidgetsBinding.instance.addObserver(this);
+      _lastResumeSync = DateTime.now(); // 启动同步已在上面触发，首次 resume 不重复
+      // 圆点在桌面直接写库，原生需要知道 drift 库文件路径
+      WidgetBridge.ensureDbPath();
+      // 桌面卡片：旧版卡片点击会带 toggle 深链接进来（兼容兜底，新版走广播）
       () async {
         try {
           final initial = await HomeWidget.initiallyLaunchedFromHomeWidget();
-          _handleWidgetUri(initial);
+          if (initial != null) {
+            _handleWidgetUri(initial);
+            // 同一个启动 Intent 只消费一次（进程被系统重建时不会把状态翻回去）
+            await _intentChannel.invokeMethod<void>('consumeInitialIntent');
+          }
         } catch (_) {}
         _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
       }();
@@ -142,6 +154,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
+    if (_isAndroid) WidgetsBinding.instance.removeObserver(this);
     if (_isWindows) {
       TrayManager.instance.removeListener(this);
       _floatNotifyDebounce?.cancel();
@@ -160,6 +173,22 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void onWindowFocus() {
     ref.invalidate(tasksProvider);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // 桌面圆点是在原生侧直接改库的，App 的查询流收不到通知：
+    // 回到前台时重新查询一次，避免列表显示旧状态
+    ref.invalidate(tasksProvider);
+    ref.invalidate(activeTasksProvider);
+    // 顺带补一次同步（60 秒内只触发一次，避免频繁切 App 造成无谓请求）
+    final now = DateTime.now();
+    final last = _lastResumeSync;
+    if (last == null || now.difference(last) > const Duration(seconds: 60)) {
+      _lastResumeSync = now;
+      ref.read(syncControllerProvider.notifier).run(auto: true);
+    }
   }
 
   /// 任务变化后主动通知悬浮窗刷新（防抖：一批变化只通知一次）。

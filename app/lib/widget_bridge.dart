@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:home_widget/home_widget.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'db/database.dart';
 import 'db/sync_fields.dart';
@@ -25,11 +27,30 @@ class WidgetBridge {
   static const _qualifiedProviderNames = [
     'io.github.xinchengp.todo_app.TodoWidgetProvider', // 4x2
     'io.github.xinchengp.todo_app.TodoWidgetProvider2x2', // 2x2
+    'io.github.xinchengp.todo_app.TodoWidgetProvider4x4', // 4x4（最多 5 条）
   ];
   static Timer? _debounce;
   static String? _lastContent; // 最近一次成功写入的内容（用于去重）
   static String? _pendingContent; // 待写入内容
   static List<Task>? _pendingTasks;
+
+  /// 把数据库绝对路径交给原生侧。
+  ///
+  /// 卡片圆点的"完成"由 WidgetToggleReceiver 直接在桌面处理（不打开 App），
+  /// 原生代码需要知道 drift 库文件在哪；路径以 Flutter 的 path_provider
+  /// 解析结果为准，Kotlin 里不硬编码 /data/user/0/... 这类内部路径。
+  static Future<void> ensureDbPath() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      await HomeWidget.saveWidgetData<String>(
+        'todo_db_path',
+        p.join(docs.path, 'todo_app.sqlite'),
+      );
+    } catch (_) {
+      // 插件不可用时忽略：圆点点击会退化为无操作，不影响 App 内操作
+    }
+  }
 
   static void update(List<Task> activeTasks) {
     if (!Platform.isAndroid) return;

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../win32_autostart.dart';
 
-const kAppVersion = '1.0.16'; // 与 pubspec.yaml 的 version 保持一致
+const kAppVersion = '1.0.19'; // 与 pubspec.yaml 的 version 保持一致
 const kDefaultBaseUrl = 'https://todoapi.example.com';
 const kDefaultFallbackUrls = 'https://todoapi.example.com:8443';
 // kDefaultDirectIp 来自 providers.dart

@@ -9,11 +9,16 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            <!-- 卡片点击用 home_widget 的 action + data 传递 URI，不走 Flutter 路由解析；
+                 关闭 deep linking 避免把 todoapp:// 当成 initialRoute 解析 -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
+
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues
@@ -38,6 +43,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 桌面卡片圆点：本地写库 + 刷新卡片，不启动 Activity（所以不会跳进 App）。
+             exported=false：只接受本应用 PendingIntent 发出的显式广播。 -->
+        <receiver
+            android:name=".WidgetToggleReceiver"
+            android:exported="false" />
         <receiver
             android:name=".TodoWidgetProvider"
             android:exported="true">
@@ -59,6 +69,17 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/todo_widget_info_2x2" />
+        </receiver>
+        <receiver
+            android:name=".TodoWidgetProvider4x4"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE_OPTIONS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_widget_info_4x4" />
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:

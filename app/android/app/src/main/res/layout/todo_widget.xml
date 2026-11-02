@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 卡片布局（原创设计，主色 #66CCFF）：
-     任务药丸 = 左侧圆点点击列（占满行高、垂直居中，点击即切换完成）
-              + 右侧信息列（任务名 + 截止日期/优先级小字）。
+     任务药丸 = 左侧圆点点击列（36dp 宽、占满行高、垂直居中，点击即切换完成）
+              + 右侧信息区（任务名 + 截止日期/优先级小字，点击打开应用）。
+     圆点与信息区是同级兄弟，父容器不挂点击事件，命中区域互不遮挡。
      MagicOS 桌面的 RemoteViews 加载器不支持裸 View 元素，
      占位一律用 TextView/属性/margin 实现，勿再引入裸 View。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -10,7 +11,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_bg"
-    android:padding="10dp">
+    android:padding="8dp">
 
     <LinearLayout
         android:id="@+id/header_bar"
@@ -46,30 +47,29 @@
     </LinearLayout>
 
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="6dp" />
-    <LinearLayout
         android:id="@+id/row_0"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal"
         android:background="@drawable/widget_pill"
         android:gravity="center_vertical"
-        android:paddingLeft="7dp"
+        android:paddingLeft="4dp"
         android:paddingRight="9dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
         <TextView
             android:id="@+id/mark_0"
-            android:layout_width="28dp"
+            android:layout_width="36dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textColor="@color/circle_mark" />
         <LinearLayout
+            android:id="@+id/info_0"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="2dp"
             android:layout_weight="1"
             android:orientation="vertical">
             <TextView
@@ -96,25 +96,26 @@
         android:id="@+id/row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+        android:layout_marginTop="3dp"
         android:orientation="horizontal"
         android:background="@drawable/widget_pill"
         android:gravity="center_vertical"
-        android:paddingLeft="7dp"
+        android:paddingLeft="4dp"
         android:paddingRight="9dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
         <TextView
             android:id="@+id/mark_1"
-            android:layout_width="28dp"
+            android:layout_width="36dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textColor="@color/circle_mark" />
         <LinearLayout
+            android:id="@+id/info_1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="2dp"
             android:layout_weight="1"
             android:orientation="vertical">
             <TextView
@@ -141,25 +142,26 @@
         android:id="@+id/row_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+        android:layout_marginTop="3dp"
         android:orientation="horizontal"
         android:background="@drawable/widget_pill"
         android:gravity="center_vertical"
-        android:paddingLeft="7dp"
+        android:paddingLeft="4dp"
         android:paddingRight="9dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
         <TextView
             android:id="@+id/mark_2"
-            android:layout_width="28dp"
+            android:layout_width="36dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textColor="@color/circle_mark" />
         <LinearLayout
+            android:id="@+id/info_2"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="2dp"
             android:layout_weight="1"
             android:orientation="vertical">
             <TextView
@@ -186,25 +188,26 @@
         android:id="@+id/row_3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+        android:layout_marginTop="3dp"
         android:orientation="horizontal"
         android:background="@drawable/widget_pill"
         android:gravity="center_vertical"
-        android:paddingLeft="7dp"
+        android:paddingLeft="4dp"
         android:paddingRight="9dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
         <TextView
             android:id="@+id/mark_3"
-            android:layout_width="28dp"
+            android:layout_width="36dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textColor="@color/circle_mark" />
         <LinearLayout
+            android:id="@+id/info_3"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="2dp"
             android:layout_weight="1"
             android:orientation="vertical">
             <TextView
@@ -231,25 +234,26 @@
         android:id="@+id/row_4"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+        android:layout_marginTop="3dp"
         android:orientation="horizontal"
         android:background="@drawable/widget_pill"
         android:gravity="center_vertical"
-        android:paddingLeft="7dp"
+        android:paddingLeft="4dp"
         android:paddingRight="9dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
         <TextView
             android:id="@+id/mark_4"
-            android:layout_width="28dp"
+            android:layout_width="36dp"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textColor="@color/circle_mark" />
         <LinearLayout
+            android:id="@+id/info_4"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="2dp"
             android:layout_weight="1"
             android:orientation="vertical">
             <TextView
@@ -271,4 +275,11 @@
                 android:textColor="@color/count_text" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- 行数不足时占满剩余空间：点空白也打开应用（纯 LinearLayout，MagicOS 安全） -->
+    <LinearLayout
+        android:id="@+id/spacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 </LinearLayout>

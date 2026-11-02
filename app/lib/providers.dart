@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'db/database.dart';
@@ -78,6 +80,7 @@ class SyncUiState {
 
 class SyncController extends Notifier<SyncUiState> {
   bool _running = false;
+  bool _queued = false; // 同步进行中又被请求一次：结束后补跑
 
   @override
   SyncUiState build() => const SyncUiState(SyncPhase.idle);
@@ -113,7 +116,13 @@ class SyncController extends Notifier<SyncUiState> {
   /// 执行一次同步。[auto] 为 true 时未配置则静默跳过（用于启动时自动同步），
   /// 且使用轻量网络参数（更短超时、更少重试）。
   Future<bool> run({bool auto = false}) async {
-    if (_running) return false; // 重入保护：同步进行中拒绝再次触发
+    if (_running) {
+      // 同步进行中：记一笔，本轮成功结束后补跑一次。
+      // 场景：启动自动同步还没结束，用户就在桌面卡片上勾了任务——
+      // 直接丢弃会导致这次修改要等到下次启动/手动同步才上传。
+      _queued = true;
+      return false;
+    }
     final config = await ref.read(syncConfigProvider.future);
     if (config == null) {
       if (!auto) {
@@ -123,9 +132,11 @@ class SyncController extends Notifier<SyncUiState> {
     }
     _running = true;
     state = const SyncUiState(SyncPhase.syncing);
+    var ok = false;
     try {
       await ref.read(syncEngineProvider).sync(config, light: auto);
       state = const SyncUiState(SyncPhase.success);
+      ok = true;
       return true;
     } on SyncAuthException catch (e) {
       state = SyncUiState(SyncPhase.authError, e.message);
@@ -133,6 +144,11 @@ class SyncController extends Notifier<SyncUiState> {
       state = SyncUiState(SyncPhase.error, _friendlyError(e));
     } finally {
       _running = false;
+      if (_queued) {
+        _queued = false;
+        // 本轮失败说明网络不通，补跑也只会再失败一次，留给下次同步
+        if (ok) unawaited(run());
+      }
     }
     return false;
   }

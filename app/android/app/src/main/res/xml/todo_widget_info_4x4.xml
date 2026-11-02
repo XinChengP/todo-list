@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x4 卡片（荣耀标准规格 320x336dp）：最多显示 5 条任务。
+     MagicOS 卡片选择器按 Provider 区分尺寸：每种尺寸一个 Provider。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="290dp"
+    android:minHeight="320dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/todo_widget"
+    android:description="@string/widget_desc"
+    android:widgetCategory="home_screen" />
