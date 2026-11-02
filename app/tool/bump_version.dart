@@ -37,13 +37,42 @@ void main(List<String> args) {
   }
   final code = parts[0] * 10000 + parts[1] * 100 + parts[2];
 
-  _write(_pubspec, RegExp(r'^version:.*$', multiLine: true), 'version: $name+$code');
-  _write(_settings, RegExp(r"^const kAppVersion = '.*';$", multiLine: true),
-      "const kAppVersion = '$name';");
+  // 先校验两个文件都能匹配，再一起写：避免只改成功一处留下不一致状态
+  final edits = <_Edit>[
+    _Edit(
+      path: _pubspec,
+      pattern: RegExp(r'^version:.*$', multiLine: true),
+      replacement: 'version: $name+$code',
+    ),
+    _Edit(
+      path: _settings,
+      // 行尾可能带注释（如 // 与 pubspec.yaml 的 version 保持一致），
+      // 所以只用行首锚定、不锚定行尾，保留注释
+      pattern: RegExp(r"^const kAppVersion = '[^']*';", multiLine: true),
+      replacement: "const kAppVersion = '$name';",
+    ),
+  ];
+  for (final e in edits) {
+    if (!e.pattern.hasMatch(File(e.path).readAsStringSync())) {
+      stderr.writeln('找不到要替换的内容：${e.path}  ${e.pattern.pattern}');
+      exit(1);
+    }
+  }
+  for (final e in edits) {
+    final f = File(e.path);
+    f.writeAsStringSync(f.readAsStringSync().replaceFirst(e.pattern, e.replacement));
+  }
 
   stdout.writeln('版本: ${current.name}+${current.code}  ->  $name+$code');
   stdout.writeln('下一步：flutter analyze && flutter test');
   stdout.writeln('构建：flutter build apk --release --target-platform android-arm64');
+}
+
+class _Edit {
+  _Edit({required this.path, required this.pattern, required this.replacement});
+  final String path;
+  final RegExp pattern;
+  final String replacement;
 }
 
 class _Ver {
@@ -70,14 +99,4 @@ String _bumpKind(String name, String kind) {
     default:
       return '${p[0]}.${p[1]}.${p[2] + 1}';
   }
-}
-
-void _write(String path, RegExp pattern, String replacement) {
-  final f = File(path);
-  final src = f.readAsStringSync();
-  if (!pattern.hasMatch(src)) {
-    stderr.writeln('找不到要替换的行：$path ${pattern.pattern}');
-    exit(1);
-  }
-  f.writeAsStringSync(src.replaceFirst(pattern, replacement));
 }
