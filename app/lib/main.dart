@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show exit;
+import 'dart:io' show Platform, exit;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,11 +34,15 @@ Future<void> main(List<String> args) async {
     exit(0);
   }
 
-  await _initMainWindow();
-  runApp(const ProviderScope(child: TodoApp()));
+  // 开机自启（注册表里带 --startup）：主窗口不弹出，只留托盘图标 + 自动开悬浮窗
+  final startInTray =
+      !kIsWeb && Platform.isWindows && args.contains(Win32AutoStart.startupArg);
+
+  await _initMainWindow(startInTray: startInTray);
+  runApp(ProviderScope(child: TodoApp(startInTray: startInTray)));
 }
 
-Future<void> _initMainWindow() async {
+Future<void> _initMainWindow({bool startInTray = false}) async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) return;
   try {
     // 开机自启默认开启（注册表 Run 键；用户可在设置里关闭，关闭状态不会被覆盖）
@@ -53,8 +57,13 @@ Future<void> _initMainWindow() async {
         title: '任务清单',
       ),
       () async {
-        await windowManager.show();
-        await windowManager.focus();
+        if (startInTray) {
+          // 开机自启：不亮主窗口，直接藏起来（托盘与悬浮窗在 HomePage 里起）
+          await windowManager.hide();
+        } else {
+          await windowManager.show();
+          await windowManager.focus();
+        }
       },
     );
   } catch (_) {
@@ -63,7 +72,9 @@ Future<void> _initMainWindow() async {
 }
 
 class TodoApp extends StatelessWidget {
-  const TodoApp({super.key});
+  const TodoApp({super.key, this.startInTray = false});
+
+  final bool startInTray;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +90,7 @@ class TodoApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF4F6DF5),
         brightness: Brightness.dark,
       ),
-      home: const HomePage(),
+      home: HomePage(startInTray: startInTray),
     );
   }
 }

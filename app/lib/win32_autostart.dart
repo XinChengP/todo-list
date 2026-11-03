@@ -6,7 +6,9 @@ import 'package:ffi/ffi.dart';
 /// Windows 开机自启：FFI 直调 advapi32 写 HKCU Run 键（无插件依赖）。
 /// 状态以注册表值为准：
 /// - 值不存在 = 从未设置（首次运行 ensureDefault 会默认开启）
-/// - 值为 DISABLED = 用户显式关闭（启动时不会覆盖）
+/// - 值为 DISABLED = 用户显式关闭（启动时不会覆盖；之前用"删值"表示关闭，
+///   会导致下次启动被 ensureDefault 当成首次重新打开，这里改成写标记）
+/// - 值为 "路径" --startup = 已启用；带 --startup 表示开机只进托盘+悬浮窗
 class Win32AutoStart {
   Win32AutoStart._();
 
@@ -40,13 +42,17 @@ class Win32AutoStart {
           Uint32),
       int Function(int, Pointer<Utf16>, int, int, Pointer<Uint8>,
           int)>('RegSetValueExW');
-  static final _regDeleteValueW = _advapi32.lookupFunction<
-      Int32 Function(IntPtr, Pointer<Utf16>),
-      int Function(int, Pointer<Utf16>)>('RegDeleteValueW');
   static final _regCloseKey = _advapi32.lookupFunction<
       Int32 Function(IntPtr), int Function(int)>('RegCloseKey');
 
-  static String get _exeCommand => '"${Platform.resolvedExecutable}"';
+  /// 开机启动参数：启动时主窗口不弹出，只保留托盘图标并自动打开悬浮窗
+  static const String startupArg = '--startup';
+
+  /// 用户显式关闭的标记值（不是有效命令，isEnabled 会判为 false）
+  static const String _disabledMarker = 'DISABLED';
+
+  static String get _exeCommand =>
+      '"${Platform.resolvedExecutable}" $startupArg';
 
   static Pointer<Utf16> _u16(String s) => s.toNativeUtf16();
 
@@ -95,12 +101,24 @@ class Win32AutoStart {
         // 键存在：检查值是否存在，不存在（首次）→ 开启；DISABLED 不动
         final valueName = _u16(_valueName);
         final cb = calloc<Uint32>();
+        final data = calloc<Uint8>(1024);
+        final cbData = calloc<Uint32>()..value = 1024;
         try {
           final exists = _regQueryValueExW(key.value, valueName, nullptr,
-                  nullptr, nullptr, cb) ==
+                  nullptr, data, cbData) ==
               0;
-          if (!exists) setEnabled(true);
+          if (!exists) {
+            setEnabled(true); // 首次运行 → 默认开启
+          } else {
+            final s = data.cast<Utf16>().toDartString();
+            // 老版本写的是「"路径"」没带 --startup，且不是 DISABLED → 迁移成新命令
+            if (s.startsWith('"') && !s.contains(startupArg)) {
+              setEnabled(true);
+            }
+          }
         } finally {
+          calloc.free(data);
+          calloc.free(cbData);
           calloc.free(cb);
           calloc.free(valueName);
         }
@@ -135,11 +153,15 @@ class Win32AutoStart {
           calloc.free(data);
         }
       } else {
+        // 写标记而不是删值：删值会让下次启动的 ensureDefault 误判为"首次"而重新打开
         final valueName = _u16(_valueName);
+        final data = _u16(_disabledMarker);
         try {
-          _regDeleteValueW(key.value, valueName); // 用户显式关闭
+          _regSetValueExW(key.value, valueName, 0, _regSz, data.cast<Uint8>(),
+              _disabledMarker.length * 2 + 2);
         } finally {
           calloc.free(valueName);
+          calloc.free(data);
         }
       }
     } catch (_) {

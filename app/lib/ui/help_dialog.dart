@@ -86,9 +86,10 @@ class _HelpDialog extends StatelessWidget {
               _Section(
                 icon: Icons.desktop_windows_outlined,
                 title: 'Windows 端',
-                body: '关闭窗口＝最小化到托盘（托盘右键可退出）；'
-                    '工具栏第一个按钮打开常驻悬浮窗，可置顶、可拖动，点标题即完成；'
-                    '默认开机自启，可在同步设置里关掉。',
+                body: '关闭窗口＝最小化到托盘（托盘图标右键：显示主窗口 / 显示隐藏悬浮窗 / 退出）；'
+                    '工具栏的悬浮窗按钮可常驻置顶、可拖动，点标题即完成；'
+                    '默认开机自启，开机后只起托盘 + 悬浮窗，主窗口留在托盘里不弹出，'
+                    '点托盘「显示主窗口」才出来；不需要可在同步设置里关掉。',
               ),
               _Section(
                 icon: Icons.sync,

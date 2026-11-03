@@ -103,6 +103,53 @@ class Win32FloatWindow {
     }
   }
 
+  /// 把本进程的主窗口藏起来（等价"最小化到托盘"）。
+  ///
+  /// 不用 windowManager.hide()：它内部懒解析窗口句柄，开机自启场景我们从未
+  /// 调用过 show()，句柄可能还没缓存 → hide() 静默无效（实测主窗口仍然可见）。
+  /// 这里直接按「本进程 + 有标题」定位主窗口（悬浮窗是无标题的），ShowWindow(SW_HIDE)。
+  static bool hideMainWindow() {
+    if (!isSupported) return false;
+    final pid = _getCurrentProcessId();
+    var hidden = false;
+    final callback = NativeCallable<EnumWindowsProcNative>.isolateLocal(
+      (int hwnd, int lParam) {
+        final pidBuf = calloc<Uint32>();
+        try {
+          _getWindowThreadProcessId(hwnd, pidBuf);
+          if (pidBuf.value != pid) return 1;
+          // 不加 IsWindowVisible 前置判断：首帧时主窗口可能还没被 runner 显示，
+          // 判断会把"稍后才出现"的主窗口漏掉（踩过）。ShowWindow 对已隐藏窗口无害。
+          if (_getWindowTextLengthW(hwnd) <= 0) return 1; // 无标题 = 悬浮窗
+          _showWindow(hwnd, 0); // SW_HIDE
+          hidden = true;
+        } finally {
+          calloc.free(pidBuf);
+        }
+        return 1;
+      },
+      exceptionalReturn: 0,
+    );
+    try {
+      _enumWindows(callback.nativeFunction, 0);
+    } catch (_) {
+    } finally {
+      callback.close();
+    }
+    return hidden;
+  }
+
+  static final _getWindowTextLengthW = _user32.lookupFunction<
+      Int32 Function(IntPtr), int Function(int)>('GetWindowTextLengthW');
+  static final _showWindow = _user32.lookupFunction<
+      Int32 Function(IntPtr, Int32), int Function(int, int)>('ShowWindow');
+
+  /// 找悬浮窗的 HWND。
+  ///
+  /// 关键：主窗口与悬浮窗**同进程、同类名**（都是 Flutter 的多窗口顶层窗口），
+  /// 只按类名+pid 匹配会命中主窗口，随后 applyCompactTopRight 的
+  /// SetWindowPos(..., SWP_SHOWWINDOW) 会把主窗口重新显示出来（踩过）。
+  /// 区分依据：主窗口有标题（"任务清单"），悬浮窗没有标题。
   static int? findHwnd() {
     final pid = _getCurrentProcessId();
     int? found;
@@ -116,7 +163,7 @@ class Win32FloatWindow {
             final pidBuf = calloc<Uint32>();
             try {
               _getWindowThreadProcessId(hwnd, pidBuf);
-              if (pidBuf.value == pid) {
+              if (pidBuf.value == pid && _getWindowTextLengthW(hwnd) == 0) {
                 found = hwnd;
                 return 0; // 找到即停
               }

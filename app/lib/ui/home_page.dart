@@ -20,6 +20,7 @@ import '../repo/repeat.dart';
 import '../repo/task_filters.dart';
 import '../repo/task_repository.dart';
 import '../widget_bridge.dart';
+import '../win32_float_window.dart';
 import 'edit_task_dialog.dart';
 import 'format.dart' show dueLabel;
 import 'help_dialog.dart';
@@ -28,7 +29,10 @@ import 'settings_dialog.dart';
 import 'task_tile.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.startInTray = false});
+
+  /// 开机自启模式：主窗口已隐藏，启动后直接拉起悬浮窗
+  final bool startInTray;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -84,6 +88,26 @@ class _HomePageState extends ConsumerState<HomePage>
       unawaited(windowManager.setPreventClose(true));
       TrayManager.instance.addListener(this);
       _initTray();
+      // 开机自启：主窗口留在托盘，直接把悬浮窗摆出来
+      if (widget.startInTray) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          // 必须等首帧之后再藏：Flutter 的 Windows runner 会在首帧显示窗口，
+          // 在 waitUntilReadyToShow 回调里 hide 会被它覆盖（实测主窗口又出现了）。
+          // windowManager.hide() 在没 show 过时句柄可能没缓存 → 用 Win32 直接藏。
+          try {
+            await windowManager.hide();
+          } catch (_) {}
+          Win32FloatWindow.hideMainWindow();
+          if (mounted) await _toggleFloatWindow();
+          // runner 可能在首帧之后才真正 show 主窗口，补两次重藏（幂等）
+          for (final ms in const [300, 1200]) {
+            Timer(Duration(milliseconds: ms), () {
+              if (mounted) Win32FloatWindow.hideMainWindow();
+            });
+          }
+        });
+      }
       // 悬浮窗勾选任务后通知主窗口刷新
       () async {
         try {
