@@ -53,12 +53,7 @@ ThemeData buildAppTheme(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      // 不单独写字重/字距：交给 textTheme.titleLarge（w700 = 雅黑真 Bold）
-      titleTextStyle: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        color: scheme.onSurface,
-      ),
+      // 不写 titleTextStyle：交给 textTheme.titleLarge，避免整体替换丢掉 fontFamily
     ),
     cardTheme: CardThemeData(
       elevation: 0,
@@ -78,16 +73,13 @@ ThemeData buildAppTheme(Brightness brightness) {
       border: border(Colors.transparent),
       enabledBorder: border(Colors.transparent),
       focusedBorder: border(scheme.primary, 1.6),
-      hintStyle: TextStyle(color: scheme.outline, fontSize: 14),
-      helperStyle: TextStyle(color: scheme.outline, fontSize: 11),
-      labelStyle: TextStyle(color: scheme.outline),
+      // 不覆盖 hint/label/helper 样式：默认样式自带字体族
     ),
     chipTheme: ChipThemeData(
       side: BorderSide.none,
       shape: const StadiumBorder(),
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      labelStyle: TextStyle(fontSize: 13, color: scheme.onSurface),
       selectedColor: scheme.primaryContainer,
       backgroundColor: isDark
           ? scheme.surfaceContainerHighest.withValues(alpha: 0.5)
@@ -157,17 +149,36 @@ ThemeData buildAppTheme(Brightness brightness) {
     ),
   );
 
-  // 统一字号/字重阶梯（避免各控件里散落 fontSize: 11/13 这类硬编码）
-  return base.copyWith(
-    textTheme: base.textTheme.copyWith(
-      titleLarge: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-      titleMedium: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      titleSmall: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-      bodyLarge: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
-      bodyMedium: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400),
-      bodySmall: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-      labelSmall: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w400),
-      labelMedium: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
-    ),
-  );
+  // 字号/字重阶梯：必须基于 base 的样式 copyWith（保留 fontFamily），
+  // 直接用 TextStyle(...) 整体替换会让这些文字落回默认回退字体——
+  // 这正是"中文粗细不均"反复出现的根因。最后再 apply 一次字体族兜底。
+  //
+  // 雅黑只有 Regular/Bold：w400 = 常规，w700 = 真 Bold；
+  // 任何 w500/w600 都会被系统合成加粗（笔画发糊）。
+  final t = base.textTheme;
+  final text = t
+      .copyWith(
+        titleLarge: t.titleLarge
+            ?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 0),
+        titleMedium: t.titleMedium
+            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+        titleSmall: t.titleSmall
+            ?.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
+        bodyLarge: t.bodyLarge
+            ?.copyWith(fontSize: 15, fontWeight: FontWeight.w400),
+        bodyMedium: t.bodyMedium
+            ?.copyWith(fontSize: 14, fontWeight: FontWeight.w400),
+        bodySmall: t.bodySmall
+            ?.copyWith(fontSize: 12, fontWeight: FontWeight.w400),
+        // Material 默认 label 系列是 w500，雅黑会合成加粗，统一改 w400
+        labelLarge: t.labelLarge?.copyWith(
+            fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0),
+        labelMedium: t.labelMedium?.copyWith(
+            fontSize: 13, fontWeight: FontWeight.w400, letterSpacing: 0),
+        labelSmall: t.labelSmall?.copyWith(
+            fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0),
+      )
+      .apply(fontFamily: fontFamily, fontFamilyFallback: fontFallback);
+
+  return base.copyWith(textTheme: text);
 }
