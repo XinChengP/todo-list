@@ -28,9 +28,18 @@ List<Task> applyTaskFilters(
   String? listId,
   String query = '',
   Set<QuickFilter> quick = const {},
+  bool hideCompleted = false,
   DateTime? now,
 }) {
   var out = filterTasks(rows, status);
+
+  // 「隐藏已完成」只作用于"全部"视图；切到"已完成"时不能把它也藏了
+  if (hideCompleted && status == TaskFilter.all) {
+    out = [
+      for (final t in out)
+        if (t.completedAt == null) t,
+    ];
+  }
 
   if (listId != null) {
     out = [

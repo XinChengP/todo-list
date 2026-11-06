@@ -26,6 +26,9 @@ final listFilterProvider = StateProvider<String?>((ref) => null);
 /// 搜索关键字（标题 + 备注）
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
+/// 是否显示已完成任务（仅影响"全部"视图；"进行中/已完成"两个视图不受影响）
+final showCompletedProvider = StateProvider<bool>((ref) => true);
+
 /// 快捷筛选条件（可多选，与状态/清单/搜索叠加）
 final quickFiltersProvider =
     StateProvider<Set<QuickFilter>>((ref) => const <QuickFilter>{});
@@ -51,6 +54,7 @@ final tasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
   final listId = ref.watch(listFilterProvider);
   final query = ref.watch(searchQueryProvider);
   final quick = ref.watch(quickFiltersProvider);
+  final hideCompleted = !ref.watch(showCompletedProvider);
   return ref.watch(allTasksProvider).whenData(
         (rows) => applyTaskFilters(
           rows,
@@ -58,6 +62,7 @@ final tasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
           listId: listId,
           query: query,
           quick: quick,
+          hideCompleted: hideCompleted,
         ),
       );
 });

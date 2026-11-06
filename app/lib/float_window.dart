@@ -119,7 +119,10 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
   }
 
   Future<void> _load() async {
-    final rows = await _repo.watch().first;
+    // 悬浮窗只列未完成任务：勾掉的任务立刻消失（主窗口仍可看已完成）
+    final rows = (await _repo.watch().first)
+        .where((t) => t.completedAt == null)
+        .toList();
     final sig = rows
         .map((t) => '${t.id}:${t.completedAt != null}:${t.title}')
         .join('|');

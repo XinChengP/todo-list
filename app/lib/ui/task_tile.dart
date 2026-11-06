@@ -11,9 +11,13 @@ class TaskTile extends StatelessWidget {
     required this.onToggle,
     required this.onDelete,
     required this.onTap,
+    this.listName,
   });
 
   final Task task;
+
+  /// 任务所属清单名（"全部"视图下显示；为空则不显示）
+  final String? listName;
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
   final VoidCallback onTap;
@@ -63,7 +67,9 @@ class TaskTile extends StatelessWidget {
     final hasNotes = task.notes.isNotEmpty;
     final repeat = repeatLabel(task.repeatUnit, task.repeatInterval);
     final hasRepeat = repeat.isNotEmpty;
-    if (due == null && !hasNotes && !hasRepeat) return null;
+    final list = listName;
+    final hasList = list != null && list.isNotEmpty;
+    if (due == null && !hasNotes && !hasRepeat && !hasList) return null;
     final muted = TextStyle(fontSize: 12, color: theme.colorScheme.outline);
     return Row(
       children: [
@@ -86,6 +92,13 @@ class TaskTile extends StatelessWidget {
         if (hasNotes) ...[
           if (due != null || hasRepeat) const SizedBox(width: 8),
           Icon(Icons.notes, size: 14, color: theme.colorScheme.outline),
+        ],
+        if (hasList) ...[
+          if (due != null || hasRepeat || hasNotes) const SizedBox(width: 8),
+          Icon(Icons.folder_outlined, size: 14,
+              color: theme.colorScheme.outline),
+          const SizedBox(width: 2),
+          Text(list, style: muted),
         ],
       ],
     );

@@ -390,6 +390,12 @@ class _HomePageState extends ConsumerState<HomePage>
     final filter = ref.watch(taskFilterProvider);
     final tasksAsync = ref.watch(tasksProvider);
     final repo = ref.watch(taskRepoProvider);
+    final showCompleted = ref.watch(showCompletedProvider);
+    // "全部"视图下给每行标出所属清单（清单页内再标就重复了）
+    final listNames = <String, String>{
+      for (final l in ref.watch(allListsProvider).valueOrNull ?? const [])
+        l.id: l.name,
+    };
 
     // 任务变化 → 更新荣耀桌面卡片快照 + 通知悬浮窗刷新
     ref.listen(activeTasksProvider, (_, next) {
@@ -524,6 +530,9 @@ class _HomePageState extends ConsumerState<HomePage>
                         final t = tasks[i];
                         return TaskTile(
                           task: t,
+                          listName: filter == TaskFilter.all
+                              ? listNames[t.listId]
+                              : null,
                           onToggle: (done) => _toggle(repo, t, done),
                           onDelete: () => _deleteWithUndo(repo, t),
                           onTap: () => showEditTaskDialog(context, ref, t),
@@ -536,15 +545,36 @@ class _HomePageState extends ConsumerState<HomePage>
             // 底部叠加系统手势区高度，防导航键/手势条遮挡
             padding: EdgeInsets.fromLTRB(
                 16, 4, 16, 12 + MediaQuery.paddingOf(context).bottom),
-            child: SegmentedButton<TaskFilter>(
-              segments: const [
-                ButtonSegment(value: TaskFilter.all, label: Text('全部')),
-                ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
-                ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SegmentedButton<TaskFilter>(
+                    segments: const [
+                      ButtonSegment(value: TaskFilter.all, label: Text('全部')),
+                      ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
+                      ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
+                    ],
+                    selected: {filter},
+                    onSelectionChanged: (s) =>
+                        ref.read(taskFilterProvider.notifier).state = s.first,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // 一键隐藏已完成（只影响"全部"视图）
+                IconButton(
+                  onPressed: () =>
+                      ref.read(showCompletedProvider.notifier).state =
+                          !showCompleted,
+                  tooltip: showCompleted ? '隐藏已完成' : '显示已完成',
+                  isSelected: !showCompleted,
+                  icon: Icon(
+                    showCompleted
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  selectedIcon: const Icon(Icons.visibility_off),
+                ),
               ],
-              selected: {filter},
-              onSelectionChanged: (s) =>
-                  ref.read(taskFilterProvider.notifier).state = s.first,
             ),
           ),
         ],

@@ -142,6 +142,27 @@ void main() {
       expect(repeated.map((t) => t.title), ['写周报']);
     });
 
+    test('隐藏已完成：只影响"全部"视图，不影响"已完成"视图', () async {
+      final a = await repo.add(title: '做完了');
+      await repo.add(title: '还没做');
+      await repo.setCompleted(a, done: true);
+      final all = await db.select(db.tasks).get();
+
+      final hidden = applyTaskFilters(all,
+          status: TaskFilter.all, hideCompleted: true);
+      expect(hidden.map((t) => t.title), ['还没做']);
+
+      // 「已完成」视图下不能被藏空
+      final doneView = applyTaskFilters(all,
+          status: TaskFilter.done, hideCompleted: true);
+      expect(doneView.map((t) => t.title), ['做完了']);
+
+      // 「进行中」本来就不含已完成，开关无副作用
+      final activeView = applyTaskFilters(all,
+          status: TaskFilter.active, hideCompleted: true);
+      expect(activeView.map((t) => t.title), ['还没做']);
+    });
+
     test('activeCountByList 只数未完成', () async {
       final l = await repo.addList('工作');
       final a = await repo.add(title: 'A', listId: l.id);
