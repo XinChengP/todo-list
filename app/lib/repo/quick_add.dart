@@ -11,37 +11,25 @@
 ///   时间  `18点` `18:30` `下午3点` `晚上8点` `9点半`
 library;
 
+import 'repeat.dart';
+
 class QuickAddResult {
   const QuickAddResult({
     required this.title,
     this.dueAt,
     this.priority = 0,
     this.listName,
-    this.repeatUnit,
-    this.repeatInterval,
+    this.repeat,
   });
 
   final String title;
   final int? dueAt;
   final int priority;
   final String? listName;
-  final String? repeatUnit;
-  final int? repeatInterval;
+  final RepeatRule? repeat;
 
   bool get hasExtras =>
-      dueAt != null ||
-      priority > 0 ||
-      listName != null ||
-      (repeatUnit != null);
-
-  QuickAddResult copyWith({int? dueAt}) => QuickAddResult(
-        title: title,
-        dueAt: dueAt ?? this.dueAt,
-        priority: priority,
-        listName: listName,
-        repeatUnit: repeatUnit,
-        repeatInterval: repeatInterval,
-      );
+      dueAt != null || priority > 0 || listName != null || repeat != null;
 }
 
 const _unitMap = {'天': 'day', '周': 'week', '月': 'month', '年': 'year'};
@@ -57,8 +45,7 @@ QuickAddResult parseQuickAdd(String input, {DateTime? now}) {
 
   String? listName;
   var priority = 0;
-  String? repeatUnit;
-  int? repeatInterval;
+  RepeatRule? repeat;
   DateTime? date;
   int? hour;
   int? minute;
@@ -81,15 +68,60 @@ QuickAddResult parseQuickAdd(String input, {DateTime? now}) {
     text = text.replaceRange(priMatch.start, priMatch.end, ' ');
   }
 
-  // 周期 每3天 / 每天 / 每周 / 每月 / 每年
-  final repMatch = RegExp(r'每(\d{1,2})?(天|周|月|年)').firstMatch(text);
-  if (repMatch != null) {
-    repeatUnit = _unitMap[repMatch.group(2)!];
-    var n = int.tryParse(repMatch.group(1) ?? '1') ?? 1;
-    if (n < 1) n = 1;
-    if (n > 99) n = 99;
-    repeatInterval = n;
-    text = text.replaceRange(repMatch.start, repMatch.end, ' ');
+  // 周期：工作日 / 每月最后一天 / 每周一三五 / 每月5号 / 每3天 …
+  final workday = RegExp(r'工作日').firstMatch(text);
+  if (workday != null) {
+    repeat = const RepeatRule(unit: 'week', weekdays: [1, 2, 3, 4, 5]);
+    text = text.replaceRange(workday.start, workday.end, ' ');
+  }
+
+  if (repeat == null) {
+    final lastDay = RegExp(r'每月(?:的)?最后一[天日]').firstMatch(text);
+    if (lastDay != null) {
+      repeat = const RepeatRule(unit: 'month', monthMode: 'last');
+      text = text.replaceRange(lastDay.start, lastDay.end, ' ');
+    }
+  }
+
+  if (repeat == null) {
+    // 每周一、三、五 / 每星期一三五
+    final wk = RegExp(r'每(?:周|星期)([一二三四五六日天、,，\s]+)').firstMatch(text);
+    if (wk != null) {
+      final days = <int>[];
+      for (final ch in wk.group(1)!.split('')) {
+        final d = _weekdayMap[ch];
+        if (d != null && !days.contains(d)) days.add(d);
+      }
+      if (days.isNotEmpty) {
+        days.sort();
+        repeat = RepeatRule(unit: 'week', weekdays: days);
+        text = text.replaceRange(wk.start, wk.end, ' ');
+      }
+    }
+  }
+
+  if (repeat == null) {
+    // 每月 5 号
+    final md = RegExp(r'每月(\d{1,2})[号日]').firstMatch(text);
+    if (md != null) {
+      final day = int.tryParse(md.group(1)!);
+      if (day != null && day >= 1 && day <= 31) {
+        repeat = RepeatRule(unit: 'month', monthMode: 'dom', anchorDay: day);
+        text = text.replaceRange(md.start, md.end, ' ');
+      }
+    }
+  }
+
+  if (repeat == null) {
+    final repMatch = RegExp(r'每(\d{1,2})?(天|周|月|年)').firstMatch(text);
+    if (repMatch != null) {
+      final unit = _unitMap[repMatch.group(2)!];
+      var n = int.tryParse(repMatch.group(1) ?? '1') ?? 1;
+      if (n < 1) n = 1;
+      if (n > 99) n = 99;
+      repeat = RepeatRule(unit: unit!, n: n);
+      text = text.replaceRange(repMatch.start, repMatch.end, ' ');
+    }
   }
 
   // 时间 18:30 / 18点 / 9点半 / 下午3点
@@ -131,8 +163,7 @@ QuickAddResult parseQuickAdd(String input, {DateTime? now}) {
     dueAt: dueAt,
     priority: priority,
     listName: listName,
-    repeatUnit: repeatUnit,
-    repeatInterval: repeatInterval,
+    repeat: repeat,
   );
 }
 

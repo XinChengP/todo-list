@@ -99,7 +99,7 @@ class WidgetBridge {
               'due': _dueLabel(t.dueAt),
               'priority': t.priority,
               // 周期标签（"每天"/"每 3 周"），空串表示不重复
-              'repeat': repeatLabel(t.repeatUnit, t.repeatInterval),
+              'repeat': resolveRule(t.repeatRule, t.repeatUnit, t.repeatInterval)?.describe() ?? '',
               'overdue': t.dueAt != null &&
                   isOverdue(t.dueAt!) &&
                   t.completedAt == null,

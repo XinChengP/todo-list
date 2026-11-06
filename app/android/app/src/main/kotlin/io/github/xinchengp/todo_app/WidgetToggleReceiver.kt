@@ -109,10 +109,18 @@ class WidgetToggleReceiver : BroadcastReceiver() {
         val arr = obj.optJSONArray("tasks") ?: return
 
         var changed = false
+        var removed = false
         for (i in 0 until arr.length()) {
             val t = arr.optJSONObject(i) ?: continue
             if (t.optString("id") != id) continue
-            if (t.optBoolean("done") != done) {
+            val repeating = t.optString("repeat", "").isNotEmpty()
+            if (repeating && done) {
+                // 周期任务：勾掉的是"这一次"，直接从卡片移除；
+                // App 下次刷新快照时会带着新日期回来（不会先显示一个已完成占位）
+                arr.remove(i)
+                removed = true
+                changed = true
+            } else if (t.optBoolean("done") != done) {
                 t.put("done", done)
                 changed = true
             }
@@ -121,7 +129,11 @@ class WidgetToggleReceiver : BroadcastReceiver() {
         if (!changed) return
 
         val count = obj.optInt("activeCount", 0)
-        obj.put("activeCount", (count + if (done) -1 else 1).coerceAtLeast(0))
+        obj.put(
+            "activeCount",
+            if (removed) (count - 1).coerceAtLeast(0)
+            else (count + if (done) -1 else 1).coerceAtLeast(0),
+        )
         obj.put("updatedAt", System.currentTimeMillis())
         prefs.edit().putString(KEY_SNAPSHOT, obj.toString()).commit()
     }

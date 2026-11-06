@@ -17,6 +17,8 @@ const kTaskFields = [
   'deleted_at',
   'repeat_unit',
   'repeat_interval',
+  'repeat_rule',
+  'repeat_done',
 ];
 const kListFields = ['name', 'sort_order', 'deleted_at'];
 
@@ -47,6 +49,8 @@ Object? _localValue(Task t, String f) => switch (f) {
       'deleted_at' => t.deletedAt,
       'repeat_unit' => t.repeatUnit,
       'repeat_interval' => t.repeatInterval,
+      'repeat_rule' => t.repeatRule,
+      'repeat_done' => t.repeatDone,
       _ => null,
     };
 
@@ -105,6 +109,8 @@ TasksCompanion applyTaskField(TasksCompanion c, String f, Object? v) =>
       'deleted_at' => c.copyWith(deletedAt: Value((v as num?)?.toInt())),
       'repeat_unit' => c.copyWith(repeatUnit: Value(v as String?)),
       'repeat_interval' => c.copyWith(repeatInterval: Value((v as num?)?.toInt())),
+      'repeat_rule' => c.copyWith(repeatRule: Value(v as String?)),
+      'repeat_done' => c.copyWith(repeatDone: Value((v as num?)?.toInt())),
       _ => throw StateError('tasks 未知字段：$f'),
     };
 
@@ -115,4 +121,41 @@ TaskListsCompanion applyListField(TaskListsCompanion c, String f, Object? v) =>
       'sort_order' => c.copyWith(sortOrder: Value((v as num?)?.toInt() ?? 0)),
       'deleted_at' => c.copyWith(deletedAt: Value((v as num?)?.toInt())),
       _ => throw StateError('lists 未知字段：$f'),
+    };
+
+// ---------- 完成日志 ----------
+
+const kLogFields = ['task_id', 'title', 'due_at', 'completed_at', 'deleted_at'];
+
+Map<String, dynamic> logToProtocol(TaskLog l) {
+  final fts = FieldTs.parse(l.fieldTs);
+  return {
+    'id': l.id,
+    'created_at': l.createdAt,
+    'fields': {
+      for (final f in kLogFields)
+        f: {
+          'v': switch (f) {
+            'task_id' => l.taskId,
+            'title' => l.title,
+            'due_at' => l.dueAt,
+            'completed_at' => l.completedAt,
+            'deleted_at' => l.deletedAt,
+            _ => null,
+          },
+          'at': fts[f],
+        },
+    },
+  };
+}
+
+TaskLogsCompanion applyLogField(TaskLogsCompanion c, String f, Object? v) =>
+    switch (f) {
+      'task_id' => c.copyWith(taskId: Value((v as String?) ?? '')),
+      'title' => c.copyWith(title: Value((v as String?) ?? '')),
+      'due_at' => c.copyWith(dueAt: Value((v as num?)?.toInt())),
+      'completed_at' =>
+        c.copyWith(completedAt: Value(((v as num?) ?? 0).toInt())),
+      'deleted_at' => c.copyWith(deletedAt: Value((v as num?)?.toInt())),
+      _ => throw StateError('logs 未知字段：$f'),
     };

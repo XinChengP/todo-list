@@ -91,6 +91,8 @@ class SyncEngine {
         await (_db.select(_db.tasks)..where((t) => t.dirty.equals(true))).get();
     final dirtyLists =
         await (_db.select(_db.taskLists)..where((l) => l.dirty.equals(true))).get();
+    final dirtyLogs =
+        await (_db.select(_db.taskLogs)..where((l) => l.dirty.equals(true))).get();
     // 超过单批上限时交给分块 push 路径（正常使用不会触发）
     if (dirtyTasks.length > _pushChunkSize || dirtyLists.length > _pushChunkSize) {
       return false;
@@ -105,6 +107,7 @@ class SyncEngine {
           'since': cursor,
           'tasks': [for (final t in dirtyTasks) taskToProtocol(t)],
           'lists': [for (final l in dirtyLists) listToProtocol(l)],
+          'logs': [for (final l in dirtyLogs) logToProtocol(l)],
         },
         timeout: timeout,
         retries: retries,
@@ -131,6 +134,9 @@ class SyncEngine {
     for (final row in _rows(resp, 'lists')) {
       await _overwriteListFromServer(row);
     }
+    for (final row in _rows(resp, 'logs')) {
+      await _overwriteLogFromServer(row);
+    }
 
     // 拉取部分：先应用随响应带回的增量，再按 has_more 续拉
     final pull = (resp['pull'] as Map).cast<String, dynamic>();
@@ -139,6 +145,9 @@ class SyncEngine {
     }
     for (final row in _rows(pull, 'lists')) {
       await _mergeList(row);
+    }
+    for (final row in _rows(pull, 'logs')) {
+      await _overwriteLogFromServer(row);
     }
     var next = ((pull['cursor'] as num?) ?? cursor).toInt();
     var hasMore = pull['has_more'] == true;
@@ -150,6 +159,9 @@ class SyncEngine {
       }
       for (final row in _rows(more, 'lists')) {
         await _mergeList(row);
+      }
+      for (final row in _rows(more, 'logs')) {
+        await _overwriteLogFromServer(row);
       }
       next = ((more['cursor'] as num?) ?? next).toInt();
       hasMore = more['has_more'] == true;
@@ -168,18 +180,23 @@ class SyncEngine {
     final dirtyLists = await (_db.select(_db.taskLists)
           ..where((l) => l.dirty.equals(true)))
         .get();
-    if (dirtyTasks.isEmpty && dirtyLists.isEmpty) return;
+    final dirtyLogs = await (_db.select(_db.taskLogs)
+          ..where((l) => l.dirty.equals(true)))
+        .get();
+    if (dirtyTasks.isEmpty && dirtyLists.isEmpty && dirtyLogs.isEmpty) return;
 
     for (var i = 0;
         i < dirtyTasks.length || i < dirtyLists.length;
         i += _pushChunkSize) {
       final taskChunk = dirtyTasks.skip(i).take(_pushChunkSize).toList();
       final listChunk = dirtyLists.skip(i).take(_pushChunkSize).toList();
-      if (taskChunk.isEmpty && listChunk.isEmpty) break;
+      final logChunk = dirtyLogs.skip(i).take(_pushChunkSize).toList();
+      if (taskChunk.isEmpty && listChunk.isEmpty && logChunk.isEmpty) break;
 
       final resp = await api.postJson('/v1/sync/push', {
         'tasks': [for (final t in taskChunk) taskToProtocol(t)],
         'lists': [for (final l in listChunk) listToProtocol(l)],
+        'logs': [for (final l in logChunk) logToProtocol(l)],
       });
 
       for (final row in _rows(resp, 'tasks')) {
@@ -187,6 +204,9 @@ class SyncEngine {
       }
       for (final row in _rows(resp, 'lists')) {
         await _overwriteListFromServer(row);
+      }
+      for (final row in _rows(resp, 'logs')) {
+        await _overwriteLogFromServer(row);
       }
     }
   }
@@ -231,6 +251,25 @@ class SyncEngine {
         );
   }
 
+  Future<void> _overwriteLogFromServer(Map<String, dynamic> remote) async {
+    final f = parseProtocolFields(remote, kLogFields);
+    final ts = fieldTsFromProtocol(f);
+    await _db.into(_db.taskLogs).insertOnConflictUpdate(
+          TaskLogsCompanion.insert(
+            id: remote['id'] as String,
+            taskId: (f['task_id']!.v as String?) ?? '',
+            title: Value((f['title']!.v as String?) ?? ''),
+            dueAt: Value((f['due_at']!.v as num?)?.toInt()),
+            completedAt: ((f['completed_at']!.v as num?) ?? ts.maxTs).toInt(),
+            deletedAt: Value((f['deleted_at']!.v as num?)?.toInt()),
+            createdAt: ((remote['created_at'] as num?) ?? ts.maxTs).toInt(),
+            updatedAt: ((remote['updated_at'] as num?) ?? ts.maxTs).toInt(),
+            fieldTs: Value(ts.encode()),
+            dirty: const Value(false),
+          ),
+        );
+  }
+
   // ---------- pull ----------
 
   Future<void> _pull(ApiClient api, {required Duration timeout, required int retries}) async {
@@ -244,6 +283,9 @@ class SyncEngine {
       }
       for (final row in _rows(resp, 'lists')) {
         await _mergeList(row);
+      }
+      for (final row in _rows(resp, 'logs')) {
+        await _overwriteLogFromServer(row);
       }
       cursor = ((resp['cursor'] as num?) ?? cursor).toInt();
       hasMore = resp['has_more'] == true;

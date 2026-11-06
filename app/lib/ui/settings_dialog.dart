@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers.dart';
+import '../repo/repeat.dart';
+import 'stats_dialog.dart';
 import '../win32_autostart.dart';
 
-const kAppVersion = '1.0.26'; // 与 pubspec.yaml 的 version 保持一致
+const kAppVersion = '1.1.0'; // 与 pubspec.yaml 的 version 保持一致
 const kDefaultBaseUrl = 'https://todoapi.example.com';
 const kDefaultFallbackUrls = 'https://todoapi.example.com:8443';
 // kDefaultDirectIp 来自 providers.dart
@@ -58,6 +60,15 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
       TextEditingController(text: widget.initialDirectIp);
   bool _obscure = true;
   late bool _autostart = Win32AutoStart.isEnabled();
+  RepeatCatchup _catchup = RepeatCatchup.skip;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(taskRepoProvider).catchupPolicy().then((p) {
+      if (mounted) setState(() => _catchup = p);
+    });
+  }
 
   @override
   void dispose() {
@@ -143,6 +154,40 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
                     setState(() => _autostart = v);
                   },
                 ),
+              const Divider(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.insights, size: 20),
+                title: const Text('统计与回顾'),
+                subtitle: const Text('今天/近 7 天/本月完成数、连续天数'),
+                onTap: () => showStatsDialog(context, ref),
+              ),
+              const SizedBox(height: 4),
+              // 逾期策略：勾选周期任务时怎么安排下一次
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('周期任务逾期时',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (policy, label) in const [
+                    (RepeatCatchup.skip, '滚到未来'),
+                    (RepeatCatchup.once, '只前进一次'),
+                    (RepeatCatchup.today, '对齐今天'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: _catchup == policy,
+                      onSelected: (_) async {
+                        await ref.read(taskRepoProvider).setCatchupPolicy(policy);
+                        if (mounted) setState(() => _catchup = policy);
+                      },
+                    ),
+                ],
+              ),
               const SizedBox(height: 16),
               // 按钮放进滚动区：ROM 键盘 inset 处理不可靠时仍可触达
               Row(

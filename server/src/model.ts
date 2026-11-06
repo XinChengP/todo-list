@@ -28,6 +28,20 @@ export const TABLES: Record<string, TableSpec> = {
       // repeat_interval = 间隔（≥1）。客户端完成后原地滚到下一次。
       repeat_unit: { kind: 'text', maxLen: 8 },
       repeat_interval: { kind: 'int' },
+      // 周期规则 JSON（新）：周几多选 / 月末 / 第 N 个周几 / 结束条件
+      repeat_rule: { kind: 'text', maxLen: 512 },
+      // 该周期已完成的次数（用于「共 N 次」）
+      repeat_done: { kind: 'int' },
+    },
+  },
+  // 完成日志：统计/连续天数用，与任务同样走字段级 LWW
+  logs: {
+    fields: {
+      task_id: { kind: 'text', maxLen: 64, notNull: true },
+      title: { kind: 'text', maxLen: 5000, notNull: true },
+      due_at: { kind: 'int' },
+      completed_at: { kind: 'int', notNull: true },
+      deleted_at: { kind: 'int' },
     },
   },
   lists: {

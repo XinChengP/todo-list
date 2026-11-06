@@ -5,6 +5,7 @@ import '../db/database.dart' show Task;
 import '../providers.dart';
 import '../repo/repeat.dart';
 import 'format.dart';
+import 'repeat_rule_dialog.dart';
 
 Future<void> showEditTaskDialog(BuildContext context, WidgetRef ref, Task task) {
   return showDialog(
@@ -27,8 +28,8 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
   late final TextEditingController _notes = TextEditingController(text: widget.task.notes);
   late int? _dueAt = widget.task.dueAt;
   late int _priority = widget.task.priority;
-  late String? _repeatUnit = widget.task.repeatUnit;
-  late int _repeatInterval = widget.task.repeatInterval ?? 1;
+  late RepeatRule? _repeat = resolveRule(
+      widget.task.repeatRule, widget.task.repeatUnit, widget.task.repeatInterval);
   late String? _listId = widget.task.listId;
 
   @override
@@ -64,8 +65,9 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     if (_notes.text != t.notes) repo.setNotes(t, _notes.text);
     if (_dueAt != t.dueAt) repo.setDue(t, _dueAt);
     if (_priority != t.priority) repo.setPriority(t, _priority);
-    if (_repeatUnit != t.repeatUnit || _repeatInterval != (t.repeatInterval ?? 1)) {
-      repo.setRepeat(t, _repeatUnit, _repeatInterval);
+    if (_repeat?.encode() !=
+        resolveRule(t.repeatRule, t.repeatUnit, t.repeatInterval)?.encode()) {
+      repo.setRepeat(t, _repeat);
     }
     if (_listId != t.listId) repo.setList(t, _listId);
     Navigator.pop(context);
@@ -138,46 +140,69 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                 ],
               ),
               const SizedBox(height: 12),
-              // 周期：单位 + 间隔。选「不重复」时清除规则
+              // 周期规则（支持每周多选 / 月末 / 第 N 个周几 / 结束条件）
               Row(
                 children: [
-                  const Text('重复'),
-                  const SizedBox(width: 12),
-                  DropdownButton<String?>(
-                    value: _repeatUnit,
-                    items: const [
-                      DropdownMenuItem<String?>(value: null, child: Text('不重复')),
-                      DropdownMenuItem<String?>(value: RepeatUnit.day, child: Text('每天')),
-                      DropdownMenuItem<String?>(value: RepeatUnit.week, child: Text('每周')),
-                      DropdownMenuItem<String?>(value: RepeatUnit.month, child: Text('每月')),
-                      DropdownMenuItem<String?>(value: RepeatUnit.year, child: Text('每年')),
-                    ],
-                    onChanged: (v) => setState(() {
-                      _repeatUnit = v;
-                      if (v != null && _repeatInterval < 1) _repeatInterval = 1;
-                    }),
+                  const Icon(Icons.repeat, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(_repeat?.describe() ?? '不重复',
+                        style: TextStyle(
+                          color: _repeat == null
+                              ? Theme.of(context).colorScheme.outline
+                              : null,
+                        )),
                   ),
-                  if (_repeatUnit != null) ...[
-                    const SizedBox(width: 8),
-                    const Text('每'),
-                    SizedBox(
-                      width: 56,
-                      child: TextFormField(
-                        initialValue: '$_repeatInterval',
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        decoration: const InputDecoration(isDense: true),
-                        onChanged: (s) {
-                          final n = int.tryParse(s);
-                          if (n != null && n >= 1 && n <= 99) _repeatInterval = n;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(repeatUnitName(_repeatUnit!)),
-                  ],
+                  TextButton(
+                    onPressed: () async {
+                      final res = await showRepeatRuleDialog(
+                        context,
+                        initial: _repeat,
+                        dueAt: _dueAt,
+                      );
+                      if (res != null && res.changed) {
+                        setState(() => _repeat = res.rule);
+                      }
+                    },
+                    child: const Text('设置'),
+                  ),
                 ],
               ),
+              if (_repeat != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 26, bottom: 4),
+                  child: Text(
+                    () {
+                      final next = nextAfter(
+                        _repeat!,
+                        from: DateTime.fromMillisecondsSinceEpoch(
+                            _dueAt ?? DateTime.now().millisecondsSinceEpoch),
+                      );
+                      return next == null ? '' : '下次：${dueLabel(next.millisecondsSinceEpoch)}';
+                    }(),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Theme.of(context).colorScheme.primary),
+                  ),
+                ),
+              if (_repeat != null && widget.task.completedAt == null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await ref.read(taskRepoProvider).skipOccurrence(widget.task);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('已跳过这一次')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.skip_next, size: 18),
+                    label: const Text('跳过这一次'),
+                  ),
+                ),
               const SizedBox(height: 12),
               SegmentedButton<int>(
                 segments: const [

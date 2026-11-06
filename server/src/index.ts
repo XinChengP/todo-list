@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: Env }>()
  * 每次 deploy 前 bump，部署后用 `curl /health` 核对——
  * 靠这个字段才能确认"线上跑的到底是哪一版"（踩过这个坑）。
  */
-const SERVER_VERSION = '1.3.0'
+const SERVER_VERSION = '1.4.0'
 
 // 原生 App 不受 CORS 约束，这里放开以便将来复用（鉴权由令牌兜底，无风险）
 app.use('*', cors())

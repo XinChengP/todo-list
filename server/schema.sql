@@ -40,3 +40,17 @@ CREATE TABLE IF NOT EXISTS lists (
   field_ts   TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_lists_updated ON lists(updated_at);
+
+-- 完成日志（周期任务/统计）
+CREATE TABLE IF NOT EXISTS logs (
+  id           TEXT PRIMARY KEY,
+  task_id      TEXT NOT NULL DEFAULT '',
+  title        TEXT NOT NULL DEFAULT '',
+  due_at       INTEGER,
+  completed_at INTEGER NOT NULL DEFAULT 0,
+  deleted_at   INTEGER,
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  field_ts     TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_logs_updated ON logs(updated_at);

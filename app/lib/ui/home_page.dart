@@ -670,8 +670,7 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
         next.dueAt != _parsed.dueAt ||
         next.priority != _parsed.priority ||
         next.listName != _parsed.listName ||
-        next.repeatUnit != _parsed.repeatUnit ||
-        next.repeatInterval != _parsed.repeatInterval) {
+        next.repeat?.encode() != _parsed.repeat?.encode()) {
       setState(() => _parsed = next);
     }
   }
@@ -696,8 +695,7 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
       dueAt: parsed.dueAt,
       priority: parsed.priority,
       listId: listId,
-      repeatUnit: parsed.repeatUnit,
-      repeatInterval: parsed.repeatInterval,
+      repeat: parsed.repeat,
     );
     _controller.clear();
     if (mounted) setState(() => _parsed = const QuickAddResult(title: ''));
@@ -743,9 +741,8 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
                         ['', '低', '中', '高'][p.priority.clamp(0, 3)]),
                   if (p.listName != null)
                     _PreviewChip(Icons.folder_outlined, p.listName!),
-                  if (p.repeatUnit != null)
-                    _PreviewChip(Icons.repeat,
-                        repeatLabel(p.repeatUnit, p.repeatInterval)),
+                  if (p.repeat != null)
+                    _PreviewChip(Icons.repeat, p.repeat!.describe()),
                 ],
               ),
             ),

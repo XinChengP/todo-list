@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:todo_app/db/database.dart';
 import 'package:todo_app/repo/quick_add.dart';
 import 'package:todo_app/repo/task_filters.dart';
+import 'package:todo_app/repo/repeat.dart';
 import 'package:todo_app/repo/task_repository.dart';
 
 /// 第一梯队：组合筛选 + 快捷添加语法
@@ -23,16 +24,16 @@ void main() {
       expect(r.title, '买牛奶');
       expect(r.priority, 3);
       expect(r.listName, '家务');
-      expect(r.repeatUnit, 'week');
-      expect(r.repeatInterval, 1);
+      expect(r.repeat?.unit, 'week');
+      expect(r.repeat?.n, 1);
       final d = DateTime.fromMillisecondsSinceEpoch(r.dueAt!);
       expect(d, DateTime(2026, 5, 21, 18, 0));
     });
 
     test('周期支持自定义间隔', () {
-      expect(parseQuickAdd('喝水 每3天', now: now).repeatUnit, 'day');
-      expect(parseQuickAdd('喝水 每3天', now: now).repeatInterval, 3);
-      expect(parseQuickAdd('复盘 每2周', now: now).repeatInterval, 2);
+      expect(parseQuickAdd('喝水 每3天', now: now).repeat?.unit, 'day');
+      expect(parseQuickAdd('喝水 每3天', now: now).repeat?.n, 3);
+      expect(parseQuickAdd('复盘 每2周', now: now).repeat?.n, 2);
     });
 
     test('优先级支持数字与中文', () {
@@ -136,7 +137,7 @@ void main() {
       expect(withDue.map((t) => t.title), ['写周报']);
 
       // 周期筛选（t1 设成周期后应命中）
-      await repo.setRepeat(t1, 'week', 1);
+      await repo.setRepeat(t1, const RepeatRule(unit: 'week'));
       final repeated = applyTaskFilters(await db.select(db.tasks).get(),
           status: TaskFilter.all, quick: {QuickFilter.repeating});
       expect(repeated.map((t) => t.title), ['写周报']);

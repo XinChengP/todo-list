@@ -122,6 +122,28 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _repeatRuleMeta = const VerificationMeta(
+    'repeatRule',
+  );
+  @override
+  late final GeneratedColumn<String> repeatRule = GeneratedColumn<String>(
+    'repeat_rule',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _repeatDoneMeta = const VerificationMeta(
+    'repeatDone',
+  );
+  @override
+  late final GeneratedColumn<int> repeatDone = GeneratedColumn<int>(
+    'repeat_done',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -182,6 +204,8 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     deletedAt,
     repeatUnit,
     repeatInterval,
+    repeatRule,
+    repeatDone,
     createdAt,
     updatedAt,
     fieldTs,
@@ -270,6 +294,18 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('repeat_rule')) {
+      context.handle(
+        _repeatRuleMeta,
+        repeatRule.isAcceptableOrUnknown(data['repeat_rule']!, _repeatRuleMeta),
+      );
+    }
+    if (data.containsKey('repeat_done')) {
+      context.handle(
+        _repeatDoneMeta,
+        repeatDone.isAcceptableOrUnknown(data['repeat_done']!, _repeatDoneMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -351,6 +387,14 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}repeat_interval'],
       ),
+      repeatRule: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_rule'],
+      ),
+      repeatDone: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}repeat_done'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -390,8 +434,15 @@ class Task extends DataClass implements Insertable<Task> {
   /// 周期规则单位：null = 不重复；day / week / month / year
   final String? repeatUnit;
 
-  /// 周期间隔（≥1）。仅 repeatUnit 非空时有意义
+  /// 周期间隔（≥1）。仅 repeatUnit 非空时有意义（旧字段，保留兼容）
   final int? repeatInterval;
+
+  /// 周期规则 JSON（新）：见 lib/repo/repeat.dart 的 RepeatRule。
+  /// 存在时优先于 repeat_unit/repeat_interval。
+  final String? repeatRule;
+
+  /// 该周期任务已完成的次数（用于「共 N 次」结束条件）
+  final int? repeatDone;
   final int createdAt;
   final int updatedAt;
 
@@ -412,6 +463,8 @@ class Task extends DataClass implements Insertable<Task> {
     this.deletedAt,
     this.repeatUnit,
     this.repeatInterval,
+    this.repeatRule,
+    this.repeatDone,
     required this.createdAt,
     required this.updatedAt,
     required this.fieldTs,
@@ -444,6 +497,12 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || repeatInterval != null) {
       map['repeat_interval'] = Variable<int>(repeatInterval);
+    }
+    if (!nullToAbsent || repeatRule != null) {
+      map['repeat_rule'] = Variable<String>(repeatRule);
+    }
+    if (!nullToAbsent || repeatDone != null) {
+      map['repeat_done'] = Variable<int>(repeatDone);
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -479,6 +538,12 @@ class Task extends DataClass implements Insertable<Task> {
       repeatInterval: repeatInterval == null && nullToAbsent
           ? const Value.absent()
           : Value(repeatInterval),
+      repeatRule: repeatRule == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatRule),
+      repeatDone: repeatDone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatDone),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       fieldTs: Value(fieldTs),
@@ -503,6 +568,8 @@ class Task extends DataClass implements Insertable<Task> {
       deletedAt: serializer.fromJson<int?>(json['deletedAt']),
       repeatUnit: serializer.fromJson<String?>(json['repeatUnit']),
       repeatInterval: serializer.fromJson<int?>(json['repeatInterval']),
+      repeatRule: serializer.fromJson<String?>(json['repeatRule']),
+      repeatDone: serializer.fromJson<int?>(json['repeatDone']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       fieldTs: serializer.fromJson<String>(json['fieldTs']),
@@ -524,6 +591,8 @@ class Task extends DataClass implements Insertable<Task> {
       'deletedAt': serializer.toJson<int?>(deletedAt),
       'repeatUnit': serializer.toJson<String?>(repeatUnit),
       'repeatInterval': serializer.toJson<int?>(repeatInterval),
+      'repeatRule': serializer.toJson<String?>(repeatRule),
+      'repeatDone': serializer.toJson<int?>(repeatDone),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'fieldTs': serializer.toJson<String>(fieldTs),
@@ -543,6 +612,8 @@ class Task extends DataClass implements Insertable<Task> {
     Value<int?> deletedAt = const Value.absent(),
     Value<String?> repeatUnit = const Value.absent(),
     Value<int?> repeatInterval = const Value.absent(),
+    Value<String?> repeatRule = const Value.absent(),
+    Value<int?> repeatDone = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     String? fieldTs,
@@ -561,6 +632,8 @@ class Task extends DataClass implements Insertable<Task> {
     repeatInterval: repeatInterval.present
         ? repeatInterval.value
         : this.repeatInterval,
+    repeatRule: repeatRule.present ? repeatRule.value : this.repeatRule,
+    repeatDone: repeatDone.present ? repeatDone.value : this.repeatDone,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     fieldTs: fieldTs ?? this.fieldTs,
@@ -585,6 +658,12 @@ class Task extends DataClass implements Insertable<Task> {
       repeatInterval: data.repeatInterval.present
           ? data.repeatInterval.value
           : this.repeatInterval,
+      repeatRule: data.repeatRule.present
+          ? data.repeatRule.value
+          : this.repeatRule,
+      repeatDone: data.repeatDone.present
+          ? data.repeatDone.value
+          : this.repeatDone,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       fieldTs: data.fieldTs.present ? data.fieldTs.value : this.fieldTs,
@@ -606,6 +685,8 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('deletedAt: $deletedAt, ')
           ..write('repeatUnit: $repeatUnit, ')
           ..write('repeatInterval: $repeatInterval, ')
+          ..write('repeatRule: $repeatRule, ')
+          ..write('repeatDone: $repeatDone, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -627,6 +708,8 @@ class Task extends DataClass implements Insertable<Task> {
     deletedAt,
     repeatUnit,
     repeatInterval,
+    repeatRule,
+    repeatDone,
     createdAt,
     updatedAt,
     fieldTs,
@@ -647,6 +730,8 @@ class Task extends DataClass implements Insertable<Task> {
           other.deletedAt == this.deletedAt &&
           other.repeatUnit == this.repeatUnit &&
           other.repeatInterval == this.repeatInterval &&
+          other.repeatRule == this.repeatRule &&
+          other.repeatDone == this.repeatDone &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.fieldTs == this.fieldTs &&
@@ -665,6 +750,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<int?> deletedAt;
   final Value<String?> repeatUnit;
   final Value<int?> repeatInterval;
+  final Value<String?> repeatRule;
+  final Value<int?> repeatDone;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<String> fieldTs;
@@ -682,6 +769,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.deletedAt = const Value.absent(),
     this.repeatUnit = const Value.absent(),
     this.repeatInterval = const Value.absent(),
+    this.repeatRule = const Value.absent(),
+    this.repeatDone = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.fieldTs = const Value.absent(),
@@ -700,6 +789,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.deletedAt = const Value.absent(),
     this.repeatUnit = const Value.absent(),
     this.repeatInterval = const Value.absent(),
+    this.repeatRule = const Value.absent(),
+    this.repeatDone = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.fieldTs = const Value.absent(),
@@ -720,6 +811,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<int>? deletedAt,
     Expression<String>? repeatUnit,
     Expression<int>? repeatInterval,
+    Expression<String>? repeatRule,
+    Expression<int>? repeatDone,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<String>? fieldTs,
@@ -738,6 +831,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (repeatUnit != null) 'repeat_unit': repeatUnit,
       if (repeatInterval != null) 'repeat_interval': repeatInterval,
+      if (repeatRule != null) 'repeat_rule': repeatRule,
+      if (repeatDone != null) 'repeat_done': repeatDone,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (fieldTs != null) 'field_ts': fieldTs,
@@ -758,6 +853,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<int?>? deletedAt,
     Value<String?>? repeatUnit,
     Value<int?>? repeatInterval,
+    Value<String?>? repeatRule,
+    Value<int?>? repeatDone,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<String>? fieldTs,
@@ -776,6 +873,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       deletedAt: deletedAt ?? this.deletedAt,
       repeatUnit: repeatUnit ?? this.repeatUnit,
       repeatInterval: repeatInterval ?? this.repeatInterval,
+      repeatRule: repeatRule ?? this.repeatRule,
+      repeatDone: repeatDone ?? this.repeatDone,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       fieldTs: fieldTs ?? this.fieldTs,
@@ -820,6 +919,12 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (repeatInterval.present) {
       map['repeat_interval'] = Variable<int>(repeatInterval.value);
     }
+    if (repeatRule.present) {
+      map['repeat_rule'] = Variable<String>(repeatRule.value);
+    }
+    if (repeatDone.present) {
+      map['repeat_done'] = Variable<int>(repeatDone.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -852,6 +957,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('deletedAt: $deletedAt, ')
           ..write('repeatUnit: $repeatUnit, ')
           ..write('repeatInterval: $repeatInterval, ')
+          ..write('repeatRule: $repeatRule, ')
+          ..write('repeatDone: $repeatDone, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -1366,6 +1473,611 @@ class TaskListsCompanion extends UpdateCompanion<TaskList> {
   }
 }
 
+class $TaskLogsTable extends TaskLogs with TableInfo<$TaskLogsTable, TaskLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TaskLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
+  @override
+  late final GeneratedColumn<int> dueAt = GeneratedColumn<int>(
+    'due_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<int> completedAt = GeneratedColumn<int>(
+    'completed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAt = GeneratedColumn<int>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldTsMeta = const VerificationMeta(
+    'fieldTs',
+  );
+  @override
+  late final GeneratedColumn<String> fieldTs = GeneratedColumn<String>(
+    'field_ts',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    taskId,
+    title,
+    dueAt,
+    completedAt,
+    deletedAt,
+    createdAt,
+    updatedAt,
+    fieldTs,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'task_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TaskLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('due_at')) {
+      context.handle(
+        _dueAtMeta,
+        dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_completedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('field_ts')) {
+      context.handle(
+        _fieldTsMeta,
+        fieldTs.isAcceptableOrUnknown(data['field_ts']!, _fieldTsMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TaskLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TaskLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      dueAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}due_at'],
+      ),
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}completed_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      fieldTs: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field_ts'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $TaskLogsTable createAlias(String alias) {
+    return $TaskLogsTable(attachedDatabase, alias);
+  }
+}
+
+class TaskLog extends DataClass implements Insertable<TaskLog> {
+  final String id;
+  final String taskId;
+
+  /// 标题快照：任务改名/删除后历史仍可读
+  final String title;
+  final int? dueAt;
+  final int completedAt;
+  final int? deletedAt;
+  final int createdAt;
+  final int updatedAt;
+  final String fieldTs;
+  final bool dirty;
+  const TaskLog({
+    required this.id,
+    required this.taskId,
+    required this.title,
+    this.dueAt,
+    required this.completedAt,
+    this.deletedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.fieldTs,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['task_id'] = Variable<String>(taskId);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || dueAt != null) {
+      map['due_at'] = Variable<int>(dueAt);
+    }
+    map['completed_at'] = Variable<int>(completedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<int>(deletedAt);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    map['field_ts'] = Variable<String>(fieldTs);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  TaskLogsCompanion toCompanion(bool nullToAbsent) {
+    return TaskLogsCompanion(
+      id: Value(id),
+      taskId: Value(taskId),
+      title: Value(title),
+      dueAt: dueAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueAt),
+      completedAt: Value(completedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      fieldTs: Value(fieldTs),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory TaskLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TaskLog(
+      id: serializer.fromJson<String>(json['id']),
+      taskId: serializer.fromJson<String>(json['taskId']),
+      title: serializer.fromJson<String>(json['title']),
+      dueAt: serializer.fromJson<int?>(json['dueAt']),
+      completedAt: serializer.fromJson<int>(json['completedAt']),
+      deletedAt: serializer.fromJson<int?>(json['deletedAt']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      fieldTs: serializer.fromJson<String>(json['fieldTs']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'taskId': serializer.toJson<String>(taskId),
+      'title': serializer.toJson<String>(title),
+      'dueAt': serializer.toJson<int?>(dueAt),
+      'completedAt': serializer.toJson<int>(completedAt),
+      'deletedAt': serializer.toJson<int?>(deletedAt),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'fieldTs': serializer.toJson<String>(fieldTs),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  TaskLog copyWith({
+    String? id,
+    String? taskId,
+    String? title,
+    Value<int?> dueAt = const Value.absent(),
+    int? completedAt,
+    Value<int?> deletedAt = const Value.absent(),
+    int? createdAt,
+    int? updatedAt,
+    String? fieldTs,
+    bool? dirty,
+  }) => TaskLog(
+    id: id ?? this.id,
+    taskId: taskId ?? this.taskId,
+    title: title ?? this.title,
+    dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    completedAt: completedAt ?? this.completedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    fieldTs: fieldTs ?? this.fieldTs,
+    dirty: dirty ?? this.dirty,
+  );
+  TaskLog copyWithCompanion(TaskLogsCompanion data) {
+    return TaskLog(
+      id: data.id.present ? data.id.value : this.id,
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      title: data.title.present ? data.title.value : this.title,
+      dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      fieldTs: data.fieldTs.present ? data.fieldTs.value : this.fieldTs,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskLog(')
+          ..write('id: $id, ')
+          ..write('taskId: $taskId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('fieldTs: $fieldTs, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    taskId,
+    title,
+    dueAt,
+    completedAt,
+    deletedAt,
+    createdAt,
+    updatedAt,
+    fieldTs,
+    dirty,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TaskLog &&
+          other.id == this.id &&
+          other.taskId == this.taskId &&
+          other.title == this.title &&
+          other.dueAt == this.dueAt &&
+          other.completedAt == this.completedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.fieldTs == this.fieldTs &&
+          other.dirty == this.dirty);
+}
+
+class TaskLogsCompanion extends UpdateCompanion<TaskLog> {
+  final Value<String> id;
+  final Value<String> taskId;
+  final Value<String> title;
+  final Value<int?> dueAt;
+  final Value<int> completedAt;
+  final Value<int?> deletedAt;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<String> fieldTs;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const TaskLogsCompanion({
+    this.id = const Value.absent(),
+    this.taskId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.fieldTs = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TaskLogsCompanion.insert({
+    required String id,
+    required String taskId,
+    this.title = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    required int completedAt,
+    this.deletedAt = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.fieldTs = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       taskId = Value(taskId),
+       completedAt = Value(completedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<TaskLog> custom({
+    Expression<String>? id,
+    Expression<String>? taskId,
+    Expression<String>? title,
+    Expression<int>? dueAt,
+    Expression<int>? completedAt,
+    Expression<int>? deletedAt,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<String>? fieldTs,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (taskId != null) 'task_id': taskId,
+      if (title != null) 'title': title,
+      if (dueAt != null) 'due_at': dueAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (fieldTs != null) 'field_ts': fieldTs,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TaskLogsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? taskId,
+    Value<String>? title,
+    Value<int?>? dueAt,
+    Value<int>? completedAt,
+    Value<int?>? deletedAt,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<String>? fieldTs,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return TaskLogsCompanion(
+      id: id ?? this.id,
+      taskId: taskId ?? this.taskId,
+      title: title ?? this.title,
+      dueAt: dueAt ?? this.dueAt,
+      completedAt: completedAt ?? this.completedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      fieldTs: fieldTs ?? this.fieldTs,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (dueAt.present) {
+      map['due_at'] = Variable<int>(dueAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<int>(completedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (fieldTs.present) {
+      map['field_ts'] = Variable<String>(fieldTs.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('taskId: $taskId, ')
+          ..write('title: $title, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('fieldTs: $fieldTs, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -1576,6 +2288,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TasksTable tasks = $TasksTable(this);
   late final $TaskListsTable taskLists = $TaskListsTable(this);
+  late final $TaskLogsTable taskLogs = $TaskLogsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -1584,6 +2297,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     tasks,
     taskLists,
+    taskLogs,
     settings,
   ];
 }
@@ -1601,6 +2315,8 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<int?> deletedAt,
       Value<String?> repeatUnit,
       Value<int?> repeatInterval,
+      Value<String?> repeatRule,
+      Value<int?> repeatDone,
       required int createdAt,
       required int updatedAt,
       Value<String> fieldTs,
@@ -1620,6 +2336,8 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<int?> deletedAt,
       Value<String?> repeatUnit,
       Value<int?> repeatInterval,
+      Value<String?> repeatRule,
+      Value<int?> repeatDone,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<String> fieldTs,
@@ -1687,6 +2405,16 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<int> get repeatInterval => $composableBuilder(
     column: $table.repeatInterval,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatRule => $composableBuilder(
+    column: $table.repeatRule,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get repeatDone => $composableBuilder(
+    column: $table.repeatDone,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1775,6 +2503,16 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get repeatRule => $composableBuilder(
+    column: $table.repeatRule,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get repeatDone => $composableBuilder(
+    column: $table.repeatDone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1844,6 +2582,16 @@ class $$TasksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get repeatRule => $composableBuilder(
+    column: $table.repeatRule,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get repeatDone => $composableBuilder(
+    column: $table.repeatDone,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -1896,6 +2644,8 @@ class $$TasksTableTableManager
                 Value<int?> deletedAt = const Value.absent(),
                 Value<String?> repeatUnit = const Value.absent(),
                 Value<int?> repeatInterval = const Value.absent(),
+                Value<String?> repeatRule = const Value.absent(),
+                Value<int?> repeatDone = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String> fieldTs = const Value.absent(),
@@ -1913,6 +2663,8 @@ class $$TasksTableTableManager
                 deletedAt: deletedAt,
                 repeatUnit: repeatUnit,
                 repeatInterval: repeatInterval,
+                repeatRule: repeatRule,
+                repeatDone: repeatDone,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,
@@ -1932,6 +2684,8 @@ class $$TasksTableTableManager
                 Value<int?> deletedAt = const Value.absent(),
                 Value<String?> repeatUnit = const Value.absent(),
                 Value<int?> repeatInterval = const Value.absent(),
+                Value<String?> repeatRule = const Value.absent(),
+                Value<int?> repeatDone = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<String> fieldTs = const Value.absent(),
@@ -1949,6 +2703,8 @@ class $$TasksTableTableManager
                 deletedAt: deletedAt,
                 repeatUnit: repeatUnit,
                 repeatInterval: repeatInterval,
+                repeatRule: repeatRule,
+                repeatDone: repeatDone,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,
@@ -2246,6 +3002,306 @@ typedef $$TaskListsTableProcessedTableManager =
       TaskList,
       PrefetchHooks Function()
     >;
+typedef $$TaskLogsTableCreateCompanionBuilder =
+    TaskLogsCompanion Function({
+      required String id,
+      required String taskId,
+      Value<String> title,
+      Value<int?> dueAt,
+      required int completedAt,
+      Value<int?> deletedAt,
+      required int createdAt,
+      required int updatedAt,
+      Value<String> fieldTs,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$TaskLogsTableUpdateCompanionBuilder =
+    TaskLogsCompanion Function({
+      Value<String> id,
+      Value<String> taskId,
+      Value<String> title,
+      Value<int?> dueAt,
+      Value<int> completedAt,
+      Value<int?> deletedAt,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<String> fieldTs,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$TaskLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $TaskLogsTable> {
+  $$TaskLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fieldTs => $composableBuilder(
+    column: $table.fieldTs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TaskLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TaskLogsTable> {
+  $$TaskLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fieldTs => $composableBuilder(
+    column: $table.fieldTs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TaskLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TaskLogsTable> {
+  $$TaskLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<int> get dueAt =>
+      $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get fieldTs =>
+      $composableBuilder(column: $table.fieldTs, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$TaskLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TaskLogsTable,
+          TaskLog,
+          $$TaskLogsTableFilterComposer,
+          $$TaskLogsTableOrderingComposer,
+          $$TaskLogsTableAnnotationComposer,
+          $$TaskLogsTableCreateCompanionBuilder,
+          $$TaskLogsTableUpdateCompanionBuilder,
+          (TaskLog, BaseReferences<_$AppDatabase, $TaskLogsTable, TaskLog>),
+          TaskLog,
+          PrefetchHooks Function()
+        > {
+  $$TaskLogsTableTableManager(_$AppDatabase db, $TaskLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TaskLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TaskLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TaskLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<int?> dueAt = const Value.absent(),
+                Value<int> completedAt = const Value.absent(),
+                Value<int?> deletedAt = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String> fieldTs = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskLogsCompanion(
+                id: id,
+                taskId: taskId,
+                title: title,
+                dueAt: dueAt,
+                completedAt: completedAt,
+                deletedAt: deletedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                fieldTs: fieldTs,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String taskId,
+                Value<String> title = const Value.absent(),
+                Value<int?> dueAt = const Value.absent(),
+                required int completedAt,
+                Value<int?> deletedAt = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<String> fieldTs = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskLogsCompanion.insert(
+                id: id,
+                taskId: taskId,
+                title: title,
+                dueAt: dueAt,
+                completedAt: completedAt,
+                deletedAt: deletedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                fieldTs: fieldTs,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$TaskLogsTable, TaskLog>(table),
+                  BaseReferences<_$AppDatabase, $TaskLogsTable, TaskLog>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TaskLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TaskLogsTable,
+      TaskLog,
+      $$TaskLogsTableFilterComposer,
+      $$TaskLogsTableOrderingComposer,
+      $$TaskLogsTableAnnotationComposer,
+      $$TaskLogsTableCreateCompanionBuilder,
+      $$TaskLogsTableUpdateCompanionBuilder,
+      (TaskLog, BaseReferences<_$AppDatabase, $TaskLogsTable, TaskLog>),
+      TaskLog,
+      PrefetchHooks Function()
+    >;
 typedef $$SettingsTableCreateCompanionBuilder =
     SettingsCompanion Function({
       required String key,
@@ -2396,6 +3452,8 @@ class $AppDatabaseManager {
       $$TasksTableTableManager(_db, _db.tasks);
   $$TaskListsTableTableManager get taskLists =>
       $$TaskListsTableTableManager(_db, _db.taskLists);
+  $$TaskLogsTableTableManager get taskLogs =>
+      $$TaskLogsTableTableManager(_db, _db.taskLogs);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
 }

@@ -65,7 +65,7 @@ class TaskTile extends StatelessWidget {
     final theme = Theme.of(context);
     final due = task.dueAt;
     final hasNotes = task.notes.isNotEmpty;
-    final repeat = repeatLabel(task.repeatUnit, task.repeatInterval);
+    final repeat = resolveRule(task.repeatRule, task.repeatUnit, task.repeatInterval)?.describe() ?? '';
     final hasRepeat = repeat.isNotEmpty;
     final list = listName;
     final hasList = list != null && list.isNotEmpty;

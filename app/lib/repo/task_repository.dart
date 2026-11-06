@@ -77,19 +77,19 @@ class TaskRepository {
     int? dueAt,
     int priority = 0,
     String? listId,
-    String? repeatUnit,
-    int? repeatInterval,
+    RepeatRule? repeat,
   }) async {
     final now = nowMs();
-    final unit = RepeatUnit.isValid(repeatUnit) ? repeatUnit : null;
     final ts = FieldTs.empty.withWrites({
       'title': now,
       'notes': now,
       'priority': now,
       if (dueAt != null) 'due_at': now,
       if (listId != null) 'list_id': now,
-      if (unit != null) 'repeat_unit': now,
-      if (unit != null) 'repeat_interval': now,
+      if (repeat != null) 'repeat_rule': now,
+      if (repeat != null) 'repeat_done': now,
+      if (repeat != null) 'repeat_unit': now,
+      if (repeat != null) 'repeat_interval': now,
     });
     final id = _uuid.v7();
     await _db.into(_db.tasks).insert(
@@ -102,8 +102,10 @@ class TaskRepository {
             dueAt: Value(dueAt),
             priority: Value(priority),
             listId: Value(listId),
-            repeatUnit: Value(unit),
-            repeatInterval: Value(unit == null ? null : _normInterval(repeatInterval)),
+            repeatUnit: Value(repeat?.unit),
+            repeatInterval: Value(repeat?.n),
+            repeatRule: Value(repeat?.encode()),
+            repeatDone: Value(repeat == null ? null : 0),
             fieldTs: Value(ts.encode()),
             dirty: const Value(true),
           ),
@@ -111,32 +113,82 @@ class TaskRepository {
     return (await _db.getTaskById(id))!;
   }
 
+  /// 任务当前的周期规则（新字段优先，回退旧字段）
+  static RepeatRule? ruleOf(Task t) =>
+      RepeatRule.parse(t.repeatRule) ??
+      RepeatRule.fromLegacy(t.repeatUnit, t.repeatInterval);
+
+  static const catchupKey = 'repeat_catchup';
+
+  /// 逾期策略（本地设置，不参与同步）：
+  /// - skip：勾选时直接滚到未来（默认）
+  /// - once：只前进一个周期，仍显示逾期
+  /// - today：滚到今天或之后
+  Future<RepeatCatchup> catchupPolicy() async {
+    final row = await (_db.select(_db.settings)
+          ..where((s) => s.key.equals(catchupKey)))
+        .getSingleOrNull();
+    return switch (row?.value) {
+      'once' => RepeatCatchup.once,
+      'today' => RepeatCatchup.today,
+      _ => RepeatCatchup.skip,
+    };
+  }
+
+  Future<void> setCatchupPolicy(RepeatCatchup p) async {
+    await _db.into(_db.settings).insertOnConflictUpdate(
+          SettingsCompanion.insert(key: catchupKey, value: p.name),
+        );
+  }
+
   /// 勾选/取消完成。
   ///
-  /// 周期任务完成时**原地滚到下一次**：`due_at` 推到下一次、`completed_at` 保持为空，
-  /// 不产生历史行（同一行循环使用，也就没有"重复行被多端各建一份"的竞态）。
-  /// 返回值是推进后的新 dueAt（非周期任务返回 null），界面可据此提示"下次 X"。
+  /// 周期任务：**原地滚到下一次**，同时写一条完成日志、累加 repeat_done；
+  /// 达到「共 N 次 / 至某日」后自动结束重复，并把这一次正常标记为已完成。
+  /// 返回推进后的新 dueAt（非周期或周期结束返回 null）。
   Future<int?> setCompleted(Task t, {required bool done}) async {
     final now = nowMs();
-    if (done && RepeatUnit.isValid(t.repeatUnit)) {
-      final next = nextDueAt(
-        fromMs: t.dueAt,
-        unit: t.repeatUnit,
-        interval: t.repeatInterval,
-        nowMs: now,
-      );
-      final fts = _nextTs(t, {'completed_at': now, 'due_at': now});
+    final rule = ruleOf(t);
+
+    if (done && rule != null) {
+      final policy = await catchupPolicy();
+      final from = DateTime.fromMillisecondsSinceEpoch(t.dueAt ?? now);
+      final next = _nextWithPolicy(rule, from, DateTime.fromMillisecondsSinceEpoch(now), policy);
+      final doneCount = (t.repeatDone ?? 0) + 1;
+
+      final overMax = rule.max != null && doneCount >= rule.max!;
+      final overUntil = rule.until != null &&
+          next != null &&
+          next.millisecondsSinceEpoch > rule.until!;
+      final ended = overMax || overUntil || next == null;
+
+      // 日志：记录"这一次完成"
+      await _logCompletion(t, now);
+
+      final fts = _nextTs(t, {
+        'completed_at': now,
+        if (!ended) 'due_at': now,
+        'repeat_done': now,
+        if (ended) 'repeat_rule': now,
+        if (ended) 'repeat_unit': now,
+        if (ended) 'repeat_interval': now,
+      });
       await _write(
         t.id,
         TasksCompanion(
-          completedAt: const Value<int?>(null),
-          dueAt: Value(next),
+          // 结束时这次真的完成；否则保持未完成等下一次
+          completedAt: Value(ended ? now : null),
+          dueAt: Value(ended ? t.dueAt : next.millisecondsSinceEpoch),
+          repeatDone: Value(doneCount),
+          repeatRule: Value(ended ? null : t.repeatRule),
+          repeatUnit: Value(ended ? null : t.repeatUnit),
+          repeatInterval: Value(ended ? null : t.repeatInterval),
           fieldTs: Value(fts.encode()),
           updatedAt: Value(now),
           dirty: const Value(true),
         ),
       );
-      return next;
+      return ended ? null : next.millisecondsSinceEpoch;
     }
 
     final fts = _nextTs(t, {'completed_at': now});
@@ -149,16 +201,79 @@ class TaskRepository {
     return null;
   }
 
-  /// 设置/清除周期规则。[unit] 传 null 表示不重复。
-  Future<void> setRepeat(Task t, String? unit, int interval) async {
+  DateTime? _nextWithPolicy(RepeatRule r, DateTime from, DateTime now, RepeatCatchup p) {
+    return switch (p) {
+      RepeatCatchup.once => nextAfter(r, from: from, catchUp: false),
+      RepeatCatchup.today => nextAfter(
+          r,
+          from: from,
+          now: DateTime(now.year, now.month, now.day),
+          catchUp: true,
+        ),
+      RepeatCatchup.skip => nextAfter(r, from: from, now: now, catchUp: true),
+    };
+  }
+
+  /// 跳过这一次：前进到下一次，但不记完成、不累加次数
+  Future<int?> skipOccurrence(Task t) async {
+    final rule = ruleOf(t);
+    if (rule == null) return null;
     final now = nowMs();
-    final valid = RepeatUnit.isValid(unit) ? unit : null;
-    final fts = _nextTs(t, {'repeat_unit': now, 'repeat_interval': now});
+    final next = nextAfter(
+      rule,
+      from: DateTime.fromMillisecondsSinceEpoch(t.dueAt ?? now),
+      now: DateTime.fromMillisecondsSinceEpoch(now),
+      catchUp: true,
+    );
+    if (next == null) return null;
+    final fts = _nextTs(t, {'due_at': now});
+    await _write(t.id, TasksCompanion(
+      dueAt: Value(next.millisecondsSinceEpoch),
+      fieldTs: Value(fts.encode()),
+      updatedAt: Value(now),
+      dirty: const Value(true),
+    ));
+    return next.millisecondsSinceEpoch;
+  }
+
+  Future<void> _logCompletion(Task t, int at) async {
+    final fts = FieldTs.empty.withWrites({
+      'task_id': at,
+      'title': at,
+      'due_at': at,
+      'completed_at': at,
+    });
+    await _db.into(_db.taskLogs).insert(
+          TaskLogsCompanion.insert(
+            id: _uuid.v7(),
+            taskId: t.id,
+            title: Value(t.title),
+            dueAt: Value(t.dueAt),
+            completedAt: at,
+            createdAt: at,
+            updatedAt: at,
+            fieldTs: Value(fts.encode()),
+            dirty: const Value(true),
+          ),
+        );
+  }
+
+  /// 设置/清除周期规则（null = 不重复）
+  Future<void> setRepeat(Task t, RepeatRule? rule) async {
+    final now = nowMs();
+    final fts = _nextTs(t, {
+      'repeat_rule': now,
+      'repeat_done': now,
+      'repeat_unit': now,
+      'repeat_interval': now,
+    });
     await _write(
       t.id,
       TasksCompanion(
-        repeatUnit: Value(valid),
-        repeatInterval: Value(valid == null ? null : _normInterval(interval)),
+        repeatRule: Value(rule?.encode()),
+        repeatDone: Value(rule == null ? null : 0),
+        repeatUnit: Value(rule?.unit),
+        repeatInterval: Value(rule?.n),
         fieldTs: Value(fts.encode()),
         updatedAt: Value(now),
         dirty: const Value(true),
@@ -166,15 +281,13 @@ class TaskRepository {
     );
   }
 
-  /// 补推进周期任务：桌面卡片的原生接收器只写 `completed_at`，算不了"下一次"。
-  /// App 启动 / 回前台 / 同步结束后调用，把「已完成但仍带周期规则」的任务滚到下一次。
-  /// 返回被推进的条数（0 表示无需处理）。
+  /// 补推进周期任务：桌面卡片的原生接收器只写 completed_at，算不了"下一次"。
   Future<int> reconcileRecurring() async {
     final rows = await (_db.select(_db.tasks)
           ..where((t) =>
               t.deletedAt.isNull() &
               t.completedAt.isNotNull() &
-              t.repeatUnit.isNotNull()))
+              (t.repeatRule.isNotNull() | t.repeatUnit.isNotNull())))
         .get();
     for (final t in rows) {
       await setCompleted(t, done: true);
@@ -182,7 +295,13 @@ class TaskRepository {
     return rows.length;
   }
 
-  static int _normInterval(int? v) => (v == null || v < 1) ? 1 : (v > 99 ? 99 : v);
+  // ---- 完成日志 / 统计 ----
+
+  Stream<List<TaskLog>> watchLogs() =>
+      (_db.select(_db.taskLogs)
+            ..where((l) => l.deletedAt.isNull())
+            ..orderBy([(l) => OrderingTerm(expression: l.completedAt, mode: OrderingMode.desc)]))
+          .watch();
 
   Future<void> rename(Task t, String title) => _editField(t, 'title', (c) => c.copyWith(title: Value(title)));
   Future<void> setNotes(Task t, String notes) => _editField(t, 'notes', (c) => c.copyWith(notes: Value(notes)));
