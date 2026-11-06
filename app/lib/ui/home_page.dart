@@ -436,6 +436,15 @@ class _HomePageState extends ConsumerState<HomePage>
               );
             },
           ),
+          // 隐藏已完成（状态开关：隐藏时用实心图标表示"过滤生效"）
+          IconButton(
+            onPressed: () =>
+                ref.read(showCompletedProvider.notifier).state = !showCompleted,
+            tooltip: showCompleted ? '隐藏已完成' : '显示已完成',
+            icon: Icon(
+              showCompleted ? Icons.visibility_outlined : Icons.visibility_off,
+            ),
+          ),
           if (_isWindows)
             IconButton(
               onPressed: _toggleFloatWindow,
@@ -581,35 +590,16 @@ class _HomePageState extends ConsumerState<HomePage>
             // 底部叠加系统手势区高度，防导航键/手势条遮挡
             padding: EdgeInsets.fromLTRB(
                 16, 4, 16, 12 + MediaQuery.paddingOf(context).bottom),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SegmentedButton<TaskFilter>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: TaskFilter.all, label: Text('全部')),
-                      ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
-                      ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
-                    ],
-                    selected: {filter},
-                    onSelectionChanged: (s) =>
-                        ref.read(taskFilterProvider.notifier).state = s.first,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                // 一键隐藏已完成（只影响"全部"视图）
-                IconButton(
-                  onPressed: () =>
-                      ref.read(showCompletedProvider.notifier).state =
-                          !showCompleted,
-                  tooltip: showCompleted ? '隐藏已完成' : '显示已完成',
-                  icon: Icon(
-                    showCompleted
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                ),
+            child: SegmentedButton<TaskFilter>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: TaskFilter.all, label: Text('全部')),
+                ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
+                ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
               ],
+              selected: {filter},
+              onSelectionChanged: (s) =>
+                  ref.read(taskFilterProvider.notifier).state = s.first,
             ),
           ),
         ],
