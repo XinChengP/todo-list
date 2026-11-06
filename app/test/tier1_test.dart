@@ -1,14 +1,23 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 
 import 'package:todo_app/db/database.dart';
 import 'package:todo_app/repo/quick_add.dart';
 import 'package:todo_app/repo/task_filters.dart';
+import 'package:todo_app/providers.dart';
 import 'package:todo_app/repo/repeat.dart';
 import 'package:todo_app/repo/task_repository.dart';
 
 /// 第一梯队：组合筛选 + 快捷添加语法
 void main() {
+  test('默认隐藏已完成任务', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    expect(c.read(showCompletedProvider), isFalse);
+    // 「已完成」视图不受该开关影响，仍能看历史
+  });
+
   // 固定"现在"：2026-05-20（周三）10:00
   final now = DateTime(2026, 5, 20, 10);
 

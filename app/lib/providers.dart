@@ -27,7 +27,8 @@ final listFilterProvider = StateProvider<String?>((ref) => null);
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
 /// 是否显示已完成任务（仅影响"全部"视图；"进行中/已完成"两个视图不受影响）
-final showCompletedProvider = StateProvider<bool>((ref) => true);
+/// 默认隐藏：日常看板只关心待办，「已完成」页仍可查看历史
+final showCompletedProvider = StateProvider<bool>((ref) => false);
 
 /// 快捷筛选条件（可多选，与状态/清单/搜索叠加）
 final quickFiltersProvider =
