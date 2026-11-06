@@ -194,6 +194,9 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
       useMaterial3: true,
       colorSchemeSeed: AppPalette.brand,
       brightness: Brightness.dark,
+      // 与主窗口一致：显式中文字体，避免回退字体导致的字重/基线不齐
+      fontFamily: 'Microsoft YaHei UI',
+      fontFamilyFallback: const ['Microsoft YaHei', 'Segoe UI'],
     );
     return MaterialApp(
       theme: theme,
@@ -223,7 +226,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
                     const Expanded(
                       child: Text('任务清单',
                           style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w600)),
+                              fontSize: 11, fontWeight: FontWeight.w700)),
                     ),
                     _MiniButton(
                       icon: Icons.refresh,

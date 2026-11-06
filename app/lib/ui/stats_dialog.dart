@@ -180,7 +180,7 @@ class _Metric extends StatelessWidget {
         children: [
           Text(value,
               style: theme.textTheme.headlineSmall
-                  ?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+                  ?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w700)),
           Text(label,
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.outline)),

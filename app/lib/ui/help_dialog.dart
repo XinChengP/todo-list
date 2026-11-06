@@ -152,7 +152,7 @@ class _Section extends StatelessWidget {
               Expanded(
                 child: Text(title,
                     style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                        ?.copyWith(fontWeight: FontWeight.w700)),
               ),
             ],
           ),

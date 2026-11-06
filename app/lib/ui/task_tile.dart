@@ -67,7 +67,7 @@ class TaskTile extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w500,
+                          
                           decoration: done ? TextDecoration.lineThrough : null,
                           color: done ? scheme.outline : scheme.onSurface,
                         ),
@@ -160,7 +160,13 @@ class _Pill extends StatelessWidget {
           Icon(icon, size: 11, color: fg),
           if (text.isNotEmpty) ...[
             const SizedBox(width: 3),
-            Text(text, style: TextStyle(fontSize: 11, color: fg)),
+            Text(
+              text,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(fontSize: 11, color: fg),
+            ),
           ],
         ],
       ),

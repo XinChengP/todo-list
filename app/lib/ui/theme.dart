@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'palette.dart';
@@ -18,6 +19,13 @@ ThemeData buildAppTheme(Brightness brightness) {
     onPrimary: isDark ? AppPalette.onBrand : Colors.white,
     error: AppPalette.danger,
   );
+  // Windows 上显式指定中文字体：默认 Segoe UI 的中文是回退字体，
+  // 中英混排时字号/基线会不齐；雅黑 UI 原生支持中文。
+  final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+  final fontFamily = isWindows ? 'Microsoft YaHei UI' : null;
+  final fontFallback =
+      isWindows ? const ['Microsoft YaHei', 'Segoe UI'] : null;
+
   final canvas = isDark ? scheme.surface : const Color(0xFFF6F7FB);
   // 浅色下不要用纯白：对话框/卡片本身也是白色，输入框会"消失"
   final fieldFill = isDark
@@ -30,9 +38,13 @@ ThemeData buildAppTheme(Brightness brightness) {
         borderSide: BorderSide(color: color, width: width),
       );
 
-  return ThemeData(
+  // 字体只使用真实存在的字重：雅黑只有 Regular/Bold，
+  // 用 w500/w600 会触发合成加粗（笔画糊、发虚）。因此正文 w400、标题 w700。
+  final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
+    fontFamily: fontFamily,
+    fontFamilyFallback: fontFallback,
     scaffoldBackgroundColor: canvas,
     visualDensity: VisualDensity.standard,
     appBarTheme: AppBarTheme(
@@ -41,10 +53,10 @@ ThemeData buildAppTheme(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
+      // 不单独写字重/字距：交给 textTheme.titleLarge（w700 = 雅黑真 Bold）
       titleTextStyle: TextStyle(
         fontSize: 20,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.2,
+        fontWeight: FontWeight.w700,
         color: scheme.onSurface,
       ),
     ),
@@ -142,6 +154,20 @@ ThemeData buildAppTheme(Brightness brightness) {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+    ),
+  );
+
+  // 统一字号/字重阶梯（避免各控件里散落 fontSize: 11/13 这类硬编码）
+  return base.copyWith(
+    textTheme: base.textTheme.copyWith(
+      titleLarge: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+      titleMedium: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      titleSmall: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+      bodyLarge: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
+      bodyMedium: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400),
+      bodySmall: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+      labelSmall: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w400),
+      labelMedium: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
     ),
   );
 }
