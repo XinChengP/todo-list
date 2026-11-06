@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'float_window.dart';
 import 'ui/home_page.dart';
+import 'ui/theme.dart';
 import 'win32_float_window.dart';
 import 'win32_autostart.dart';
 
@@ -80,16 +81,8 @@ class TodoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '任务清单',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF4F6DF5),
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF4F6DF5),
-        brightness: Brightness.dark,
-      ),
+      theme: buildAppTheme(Brightness.light),
+      darkTheme: buildAppTheme(Brightness.dark),
       home: HomePage(startInTray: startInTray),
     );
   }

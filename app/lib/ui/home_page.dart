@@ -16,7 +16,6 @@ import 'package:window_manager/window_manager.dart';
 import '../db/database.dart' show Task;
 import '../providers.dart';
 import '../repo/quick_add.dart';
-import '../repo/repeat.dart';
 import '../repo/task_filters.dart';
 import '../repo/task_repository.dart';
 import '../widget_bridge.dart';
@@ -517,10 +516,47 @@ class _HomePageState extends ConsumerState<HomePage>
               error: (e, _) => Center(child: Text('加载失败：$e')),
               data: (tasks) => tasks.isEmpty
                   ? Center(
-                      child: Text(
-                        _searching || ref.watch(quickFiltersProvider).isNotEmpty
-                            ? '没有符合条件的任务'
-                            : '空空如也，在上方添加一个任务吧 ✨',
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _searching ||
+                                      ref.read(quickFiltersProvider).isNotEmpty
+                                  ? Icons.search_off
+                                  : Icons.task_alt,
+                              size: 56,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              _searching ||
+                                      ref.read(quickFiltersProvider).isNotEmpty
+                                  ? '没有符合条件的任务'
+                                  : '还没有待办',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _searching ||
+                                      ref.read(quickFiltersProvider).isNotEmpty
+                                  ? '试试放宽筛选条件，或清空搜索'
+                                  : '在顶部输入框加一个，支持「明天18点 !高 #家务 每周」',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outline,
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -549,6 +585,7 @@ class _HomePageState extends ConsumerState<HomePage>
               children: [
                 Expanded(
                   child: SegmentedButton<TaskFilter>(
+                    showSelectedIcon: false,
                     segments: const [
                       ButtonSegment(value: TaskFilter.all, label: Text('全部')),
                       ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
@@ -607,6 +644,7 @@ class ListChipsRow extends ConsumerWidget {
             child: ChoiceChip(
               label: const Text('全部'),
               selected: selected == null,
+              showCheckmark: false,
               onSelected: (_) =>
                   ref.read(listFilterProvider.notifier).state = null,
             ),
@@ -622,6 +660,7 @@ class ListChipsRow extends ConsumerWidget {
                           ? '${l.name} · ${counts[l.id]}'
                           : l.name,
                     ),
+                    showCheckmark: false,
                     selected: selected == l.id,
                     onSelected: (on) => ref
                         .read(listFilterProvider.notifier)
@@ -715,10 +754,13 @@ class _QuickAddBarState extends ConsumerState<QuickAddBar> {
             decoration: InputDecoration(
               hintText: '添加任务吧，防止又双叒叕忘了awa',
               prefixIcon: const Icon(Icons.add_task),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.send),
-                tooltip: '添加',
-                onPressed: _submit,
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: IconButton.filledTonal(
+                  icon: const Icon(Icons.send, size: 18),
+                  tooltip: '添加',
+                  onPressed: _submit,
+                ),
               ),
               border: const OutlineInputBorder(),
             ),
