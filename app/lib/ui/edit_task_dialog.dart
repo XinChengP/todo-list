@@ -128,7 +128,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                 children: [
                   OutlinedButton.icon(
                     onPressed: _pickDue,
-                    icon: const Icon(Icons.event),
+                    icon: const Icon(Icons.event_outlined),
                     label: Text(_dueAt == null ? '截止日期' : dueLabel(_dueAt!)),
                   ),
                   if (_dueAt != null)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../db/database.dart' show Task;
 import '../repo/repeat.dart';
+import 'palette.dart';
 import 'format.dart';
 
 /// 任务卡片：圆角卡片 + 圆形勾选 + 元信息小药丸
@@ -29,9 +30,9 @@ class TaskTile extends StatelessWidget {
 
   static const _priorityColors = [
     Colors.grey,
-    Color(0xFF4C9AFF),
-    Color(0xFFFFA53E),
-    Color(0xFFF25F5C),
+    AppPalette.info,
+    AppPalette.warning,
+    AppPalette.danger,
   ];
 
   @override

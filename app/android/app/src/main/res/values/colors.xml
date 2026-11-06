@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 浅色模式卡片配色（主色 #66CCFF） -->
+    <!-- 浅色模式卡片配色：与 App 共用品牌色 #66CCFF / 中性色随 Material -->
     <color name="card_bg">#FFFFFFFF</color>
-    <color name="widget_title">#FF1F2430</color>
-    <color name="count_text">#FF98A2AB</color>
+    <color name="widget_title">#FF1A1C1E</color>
+    <color name="count_text">#FF6B7280</color>
     <color name="accent">#FF66CCFF</color>
     <color name="add_text">#FF102030</color>
     <color name="pill_bg">#FFF2F5F8</color>
-    <color name="pill_text">#FF3A4148</color>
+    <color name="pill_text">#FF2B3138</color>
     <color name="circle_mark">#FFB9C4CE</color>
-    <color name="done_text">#FF98A2AB</color>
-    <color name="meta_urgent">#FFD93025</color>
+    <color name="done_text">#FF9AA3AD</color>
+    <color name="meta_urgent">#FFE05252</color>
 </resources>

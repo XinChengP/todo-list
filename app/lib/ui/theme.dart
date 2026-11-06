@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 
+import 'palette.dart';
+
 /// 全局主题：圆角卡片 + 柔和底色 + 轻量输入框，双端一致。
 ///
 /// 设计取向：信息密度不变，只把"方块感"去掉——
 /// 任务变成圆角卡片、输入框填色去边框、分隔线尽量用留白代替。
 ThemeData buildAppTheme(Brightness brightness) {
   final isDark = brightness == Brightness.dark;
+  // 品牌色只有一个来源（AppPalette.brand = #66CCFF，与桌面卡片一致）；
+  // 浅色模式把 primary 换成同色相深调，保证按钮/链接的对比度
   final scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF4F6DF5),
+    seedColor: AppPalette.brand,
     brightness: brightness,
+  ).copyWith(
+    primary: isDark ? AppPalette.brand : AppPalette.brandInk,
+    onPrimary: isDark ? AppPalette.onBrand : Colors.white,
+    error: AppPalette.danger,
   );
   final canvas = isDark ? scheme.surface : const Color(0xFFF6F7FB);
   // 浅色下不要用纯白：对话框/卡片本身也是白色，输入框会"消失"
@@ -79,6 +87,20 @@ ThemeData buildAppTheme(Brightness brightness) {
         side: WidgetStatePropertyAll(BorderSide(color: hairline)),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        // 选中态显式绑品牌色：默认的 secondaryContainer 在浅色下偏灰，
+        // 看起来像禁用；这里用品牌蓝浅底 + 深蓝字
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? (isDark
+                  ? AppPalette.brand.withValues(alpha: 0.22)
+                  : AppPalette.brand.withValues(alpha: 0.28))
+              : Colors.transparent,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? (isDark ? AppPalette.brand : AppPalette.brandInk)
+              : scheme.onSurfaceVariant,
         ),
       ),
     ),

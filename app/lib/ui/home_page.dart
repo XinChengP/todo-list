@@ -603,13 +603,11 @@ class _HomePageState extends ConsumerState<HomePage>
                       ref.read(showCompletedProvider.notifier).state =
                           !showCompleted,
                   tooltip: showCompleted ? '隐藏已完成' : '显示已完成',
-                  isSelected: !showCompleted,
                   icon: Icon(
                     showCompleted
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined,
                   ),
-                  selectedIcon: const Icon(Icons.visibility_off),
                 ),
               ],
             ),

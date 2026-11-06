@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'db/database.dart';
 import 'repo/task_repository.dart';
+import 'ui/palette.dart';
 import 'win32_float_window.dart';
 
 /// Windows 悬浮窗：半透明、无边框、始终置顶的紧凑小窗，展示进行中的任务
@@ -191,14 +192,14 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
   Widget build(BuildContext context) {
     final theme = ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: const Color(0xFF4F6DF5),
+      colorSchemeSeed: AppPalette.brand,
       brightness: Brightness.dark,
     );
     return MaterialApp(
       theme: theme,
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: const Color(0xD9141820), // 深色卡片，整窗再叠加系统级半透明
+        backgroundColor: AppPalette.floatBg, // 深色卡片，整窗再叠加系统级半透明
         body: Column(
           children: [
             // 标题栏：拖动区（原始指针事件 + FFI 移动窗口）+ 刷新 + 置顶 + 关闭
@@ -210,7 +211,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
               child: Container(
                 height: 28,
                 decoration: const BoxDecoration(
-                  color: Color(0x26FFFFFF),
+                  color: AppPalette.floatHairline,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -256,7 +257,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
                   ? const Center(
                       child: Text('今天没有待办 ✨',
                           style:
-                              TextStyle(fontSize: 11, color: Colors.white38)),
+                              TextStyle(fontSize: 11, color: AppPalette.floatTextMuted)),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -277,7 +278,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
                                       : Icons.circle_outlined,
                                   size: 13,
                                   color: done
-                                      ? const Color(0xFF8AB4F8)
+                                      ? AppPalette.brand
                                       : Colors.white38,
                                 ),
                                 const SizedBox(width: 7),
@@ -290,7 +291,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
                                       fontSize: 12,
                                       color: done
                                           ? Colors.white30
-                                          : Colors.white70,
+                                          : AppPalette.floatText,
                                       decoration: done
                                           ? TextDecoration.lineThrough
                                           : null,
@@ -307,7 +308,7 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
             Container(
               height: 18,
               decoration: const BoxDecoration(
-                color: Color(0x26FFFFFF),
+                color: AppPalette.floatHairline,
                 borderRadius:
                     BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
@@ -348,7 +349,7 @@ class _MiniButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 13,
-          color: active ? const Color(0xFF8AB4F8) : Colors.white38,
+          color: active ? AppPalette.brand : Colors.white38,
         ),
       ),
     );
