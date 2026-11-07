@@ -15,6 +15,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../db/database.dart' show Task;
 import '../providers.dart';
+import '../reminders.dart';
 import '../repo/quick_add.dart';
 import '../repo/task_filters.dart';
 import '../repo/task_repository.dart';
@@ -401,6 +402,8 @@ class _HomePageState extends ConsumerState<HomePage>
       next.whenData((tasks) {
         WidgetBridge.update(tasks);
         _notifyFloatRefresh();
+        // 任务/截止/提醒变化后重排系统通知（服务内部 1.5s 防抖）
+        ReminderService.schedule(tasks);
       });
     });
 

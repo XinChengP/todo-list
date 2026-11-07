@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../db/database.dart';
 import '../db/sync_fields.dart';
+import 'reminder_time.dart';
 import 'repeat.dart';
 
 enum TaskFilter { all, active, done }
@@ -179,6 +180,14 @@ class TaskRepository {
           // 结束时这次真的完成；否则保持未完成等下一次
           completedAt: Value(ended ? now : null),
           dueAt: Value(ended ? t.dueAt : next.millisecondsSinceEpoch),
+          // 提醒跟着新的 due 走（周期任务完成一次后自动重排下一次）
+          remindAt: Value(ended
+              ? null
+              : reminderAtMs(
+                  dueAt: next.millisecondsSinceEpoch,
+                  offsetMinutes: t.remindOffset,
+                  completed: false,
+                )),
           repeatDone: Value(doneCount),
           repeatRule: Value(ended ? null : t.repeatRule),
           repeatUnit: Value(ended ? null : t.repeatUnit),
@@ -229,6 +238,11 @@ class TaskRepository {
     final fts = _nextTs(t, {'due_at': now});
     await _write(t.id, TasksCompanion(
       dueAt: Value(next.millisecondsSinceEpoch),
+      remindAt: Value(reminderAtMs(
+        dueAt: next.millisecondsSinceEpoch,
+        offsetMinutes: t.remindOffset,
+        completed: false,
+      )),
       fieldTs: Value(fts.encode()),
       updatedAt: Value(now),
       dirty: const Value(true),
@@ -307,8 +321,47 @@ class TaskRepository {
   Future<void> setNotes(Task t, String notes) => _editField(t, 'notes', (c) => c.copyWith(notes: Value(notes)));
   Future<void> setPriority(Task t, int priority) => _editField(t, 'priority', (c) => c.copyWith(priority: Value(priority)));
 
-  /// 截止日期；传 null 表示清除（清除同样盖时间戳，保证 LWW 语义）
-  Future<void> setDue(Task t, int? dueAt) => _editField(t, 'due_at', (c) => c.copyWith(dueAt: Value(dueAt)));
+  /// 截止日期；传 null 表示清除（清除同样盖时间戳，保证 LWW 语义）。
+  /// 设置了提醒时同步重算 remind_at。
+  Future<void> setDue(Task t, int? dueAt) async {
+    final now = nowMs();
+    final fts = _nextTs(t, {'due_at': now, 'remind_at': now});
+    await _write(
+      t.id,
+      TasksCompanion(
+        dueAt: Value(dueAt),
+        remindAt: Value(reminderAtMs(
+          dueAt: dueAt,
+          offsetMinutes: t.remindOffset,
+          completed: t.completedAt != null,
+        )),
+        fieldTs: Value(fts.encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  /// 设置/关闭提醒（提前分钟数，null = 关闭）
+  Future<void> setReminder(Task t, int? minutesBefore) async {
+    final now = nowMs();
+    final offset = minutesBefore?.clamp(0, 10080);
+    final fts = _nextTs(t, {'remind_offset': now, 'remind_at': now});
+    await _write(
+      t.id,
+      TasksCompanion(
+        remindOffset: Value(offset),
+        remindAt: Value(reminderAtMs(
+          dueAt: t.dueAt,
+          offsetMinutes: offset,
+          completed: t.completedAt != null,
+        )),
+        fieldTs: Value(fts.encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
 
   Future<void> setList(Task t, String? listId) => _editField(t, 'list_id', (c) => c.copyWith(listId: Value(listId)));
 

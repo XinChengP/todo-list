@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart' show Task;
 import '../providers.dart';
+import '../reminders.dart';
+import '../repo/reminder_time.dart';
 import '../repo/repeat.dart';
 import 'format.dart';
 import 'repeat_rule_dialog.dart';
@@ -31,6 +33,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
   late RepeatRule? _repeat = resolveRule(
       widget.task.repeatRule, widget.task.repeatUnit, widget.task.repeatInterval);
   late String? _listId = widget.task.listId;
+  late int? _remindOffset = widget.task.remindOffset;
 
   @override
   void dispose() {
@@ -57,7 +60,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     final repo = ref.read(taskRepoProvider);
     final t = widget.task;
     final title = _title.text.trim();
@@ -65,12 +68,16 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     if (_notes.text != t.notes) repo.setNotes(t, _notes.text);
     if (_dueAt != t.dueAt) repo.setDue(t, _dueAt);
     if (_priority != t.priority) repo.setPriority(t, _priority);
+    if (_remindOffset != t.remindOffset) {
+      await repo.setReminder(t, _remindOffset);
+      if (_remindOffset != null) await ReminderService.requestPermission();
+    }
     if (_repeat?.encode() !=
         resolveRule(t.repeatRule, t.repeatUnit, t.repeatInterval)?.encode()) {
       repo.setRepeat(t, _repeat);
     }
     if (_listId != t.listId) repo.setList(t, _listId);
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
@@ -136,6 +143,35 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                       icon: const Icon(Icons.clear),
                       tooltip: '清除截止日期',
                       onPressed: () => setState(() => _dueAt = null),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // 提醒：只有设了截止日期才有意义
+              Row(
+                children: [
+                  const Icon(Icons.notifications_none, size: 18),
+                  const SizedBox(width: 8),
+                  const Text('提醒'),
+                  const SizedBox(width: 12),
+                  DropdownButton<int?>(
+                    value: _remindOffset,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                          value: null, child: Text('关闭')),
+                      for (final e in kReminderPresets.entries)
+                        DropdownMenuItem<int?>(
+                            value: e.key, child: Text(e.value)),
+                    ],
+                    onChanged: _dueAt == null
+                        ? null
+                        : (v) => setState(() => _remindOffset = v),
+                  ),
+                  if (_dueAt == null)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 6),
+                      child: Text('先设截止日期',
+                          style: TextStyle(fontSize: 11, color: Colors.grey)),
                     ),
                 ],
               ),
@@ -224,7 +260,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(onPressed: _save, child: const Text('保存')),
+                  FilledButton(onPressed: () => _save(), child: const Text('保存')),
                 ],
               ),
             ],

@@ -14,7 +14,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// 迁移：v1 → v2 增加周期任务两列（repeat_unit / repeat_interval）。
   /// 老库就地 ALTER，不动已有数据。
@@ -25,6 +25,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await m.addColumn(tasks, tasks.repeatUnit);
             await m.addColumn(tasks, tasks.repeatInterval);
+          }
+          if (from < 4) {
+            // 到点提醒：提前分钟数（null = 关闭）
+            await m.addColumn(tasks, tasks.remindOffset);
           }
           if (from < 3) {
             // 周期规则升级为 JSON（支持每周多选/月末/第 N 个周几/结束条件）

@@ -79,6 +79,14 @@ class _HelpDialog extends StatelessWidget {
                     '月末会夹紧：1/31 加一个月 = 2/28（闰年 2/29）；拖很久才勾选会自动追到未来。',
               ),
               _Section(
+                icon: Icons.notifications_none,
+                title: '到点提醒',
+                body: '编辑任务时可选提醒：准时 / 提前 10 分钟 / 提前 1 小时 / 提前 1 天'
+                    '（需要先设截止日期）。日期型任务按当天 09:00 提醒，不会半夜响。'
+                    'Android 走系统通知（首次开启会申请通知与精确闹钟权限）；'
+                    'Windows 在应用运行时弹系统通知，完全退出应用后不提醒。',
+              ),
+              _Section(
                 icon: Icons.widgets_outlined,
                 title: '桌面卡片（Android）',
                 body: '长按桌面 → 添加小部件 → 任务清单，有 2×2 / 4×2 / 4×4 三种。'

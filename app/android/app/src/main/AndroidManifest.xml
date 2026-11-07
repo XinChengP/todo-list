@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 网络权限：Flutter 模板只在 debug/profile 清单里带了它，release 必须自己加（经典坑） -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 到点提醒：通知权限（Android 13+ 运行时申请）+ 精确闹钟 + 开机后恢复定时 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="任务清单"
         android:name="${applicationName}"
@@ -43,6 +47,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 定时通知：插件在闹钟触发 / 开机后恢复时需要这两个 receiver -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
         <!-- 桌面卡片圆点：本地写库 + 刷新卡片，不启动 Activity（所以不会跳进 App）。
              exported=false：只接受本应用 PendingIntent 发出的显式广播。 -->
         <receiver

@@ -144,6 +144,17 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _remindOffsetMeta = const VerificationMeta(
+    'remindOffset',
+  );
+  @override
+  late final GeneratedColumn<int> remindOffset = GeneratedColumn<int>(
+    'remind_offset',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -206,6 +217,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     repeatInterval,
     repeatRule,
     repeatDone,
+    remindOffset,
     createdAt,
     updatedAt,
     fieldTs,
@@ -306,6 +318,15 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         repeatDone.isAcceptableOrUnknown(data['repeat_done']!, _repeatDoneMeta),
       );
     }
+    if (data.containsKey('remind_offset')) {
+      context.handle(
+        _remindOffsetMeta,
+        remindOffset.isAcceptableOrUnknown(
+          data['remind_offset']!,
+          _remindOffsetMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -395,6 +416,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}repeat_done'],
       ),
+      remindOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}remind_offset'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -443,6 +468,9 @@ class Task extends DataClass implements Insertable<Task> {
 
   /// 该周期任务已完成的次数（用于「共 N 次」结束条件）
   final int? repeatDone;
+
+  /// 到点提醒：提前多少分钟（null = 关闭）。绝对提醒时间由 due_at - offset 推导
+  final int? remindOffset;
   final int createdAt;
   final int updatedAt;
 
@@ -465,6 +493,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.repeatInterval,
     this.repeatRule,
     this.repeatDone,
+    this.remindOffset,
     required this.createdAt,
     required this.updatedAt,
     required this.fieldTs,
@@ -503,6 +532,9 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || repeatDone != null) {
       map['repeat_done'] = Variable<int>(repeatDone);
+    }
+    if (!nullToAbsent || remindOffset != null) {
+      map['remind_offset'] = Variable<int>(remindOffset);
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -544,6 +576,9 @@ class Task extends DataClass implements Insertable<Task> {
       repeatDone: repeatDone == null && nullToAbsent
           ? const Value.absent()
           : Value(repeatDone),
+      remindOffset: remindOffset == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remindOffset),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       fieldTs: Value(fieldTs),
@@ -570,6 +605,7 @@ class Task extends DataClass implements Insertable<Task> {
       repeatInterval: serializer.fromJson<int?>(json['repeatInterval']),
       repeatRule: serializer.fromJson<String?>(json['repeatRule']),
       repeatDone: serializer.fromJson<int?>(json['repeatDone']),
+      remindOffset: serializer.fromJson<int?>(json['remindOffset']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       fieldTs: serializer.fromJson<String>(json['fieldTs']),
@@ -593,6 +629,7 @@ class Task extends DataClass implements Insertable<Task> {
       'repeatInterval': serializer.toJson<int?>(repeatInterval),
       'repeatRule': serializer.toJson<String?>(repeatRule),
       'repeatDone': serializer.toJson<int?>(repeatDone),
+      'remindOffset': serializer.toJson<int?>(remindOffset),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'fieldTs': serializer.toJson<String>(fieldTs),
@@ -614,6 +651,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<int?> repeatInterval = const Value.absent(),
     Value<String?> repeatRule = const Value.absent(),
     Value<int?> repeatDone = const Value.absent(),
+    Value<int?> remindOffset = const Value.absent(),
     int? createdAt,
     int? updatedAt,
     String? fieldTs,
@@ -634,6 +672,7 @@ class Task extends DataClass implements Insertable<Task> {
         : this.repeatInterval,
     repeatRule: repeatRule.present ? repeatRule.value : this.repeatRule,
     repeatDone: repeatDone.present ? repeatDone.value : this.repeatDone,
+    remindOffset: remindOffset.present ? remindOffset.value : this.remindOffset,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     fieldTs: fieldTs ?? this.fieldTs,
@@ -664,6 +703,9 @@ class Task extends DataClass implements Insertable<Task> {
       repeatDone: data.repeatDone.present
           ? data.repeatDone.value
           : this.repeatDone,
+      remindOffset: data.remindOffset.present
+          ? data.remindOffset.value
+          : this.remindOffset,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       fieldTs: data.fieldTs.present ? data.fieldTs.value : this.fieldTs,
@@ -687,6 +729,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('repeatInterval: $repeatInterval, ')
           ..write('repeatRule: $repeatRule, ')
           ..write('repeatDone: $repeatDone, ')
+          ..write('remindOffset: $remindOffset, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -710,6 +753,7 @@ class Task extends DataClass implements Insertable<Task> {
     repeatInterval,
     repeatRule,
     repeatDone,
+    remindOffset,
     createdAt,
     updatedAt,
     fieldTs,
@@ -732,6 +776,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.repeatInterval == this.repeatInterval &&
           other.repeatRule == this.repeatRule &&
           other.repeatDone == this.repeatDone &&
+          other.remindOffset == this.remindOffset &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.fieldTs == this.fieldTs &&
@@ -752,6 +797,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<int?> repeatInterval;
   final Value<String?> repeatRule;
   final Value<int?> repeatDone;
+  final Value<int?> remindOffset;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<String> fieldTs;
@@ -771,6 +817,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeatInterval = const Value.absent(),
     this.repeatRule = const Value.absent(),
     this.repeatDone = const Value.absent(),
+    this.remindOffset = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.fieldTs = const Value.absent(),
@@ -791,6 +838,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeatInterval = const Value.absent(),
     this.repeatRule = const Value.absent(),
     this.repeatDone = const Value.absent(),
+    this.remindOffset = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.fieldTs = const Value.absent(),
@@ -813,6 +861,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<int>? repeatInterval,
     Expression<String>? repeatRule,
     Expression<int>? repeatDone,
+    Expression<int>? remindOffset,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<String>? fieldTs,
@@ -833,6 +882,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (repeatInterval != null) 'repeat_interval': repeatInterval,
       if (repeatRule != null) 'repeat_rule': repeatRule,
       if (repeatDone != null) 'repeat_done': repeatDone,
+      if (remindOffset != null) 'remind_offset': remindOffset,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (fieldTs != null) 'field_ts': fieldTs,
@@ -855,6 +905,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<int?>? repeatInterval,
     Value<String?>? repeatRule,
     Value<int?>? repeatDone,
+    Value<int?>? remindOffset,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<String>? fieldTs,
@@ -875,6 +926,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       repeatInterval: repeatInterval ?? this.repeatInterval,
       repeatRule: repeatRule ?? this.repeatRule,
       repeatDone: repeatDone ?? this.repeatDone,
+      remindOffset: remindOffset ?? this.remindOffset,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       fieldTs: fieldTs ?? this.fieldTs,
@@ -925,6 +977,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (repeatDone.present) {
       map['repeat_done'] = Variable<int>(repeatDone.value);
     }
+    if (remindOffset.present) {
+      map['remind_offset'] = Variable<int>(remindOffset.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -959,6 +1014,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('repeatInterval: $repeatInterval, ')
           ..write('repeatRule: $repeatRule, ')
           ..write('repeatDone: $repeatDone, ')
+          ..write('remindOffset: $remindOffset, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('fieldTs: $fieldTs, ')
@@ -2317,6 +2373,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<int?> repeatInterval,
       Value<String?> repeatRule,
       Value<int?> repeatDone,
+      Value<int?> remindOffset,
       required int createdAt,
       required int updatedAt,
       Value<String> fieldTs,
@@ -2338,6 +2395,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<int?> repeatInterval,
       Value<String?> repeatRule,
       Value<int?> repeatDone,
+      Value<int?> remindOffset,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<String> fieldTs,
@@ -2415,6 +2473,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<int> get repeatDone => $composableBuilder(
     column: $table.repeatDone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remindOffset => $composableBuilder(
+    column: $table.remindOffset,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2513,6 +2576,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get remindOffset => $composableBuilder(
+    column: $table.remindOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2592,6 +2660,11 @@ class $$TasksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get remindOffset => $composableBuilder(
+    column: $table.remindOffset,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -2646,6 +2719,7 @@ class $$TasksTableTableManager
                 Value<int?> repeatInterval = const Value.absent(),
                 Value<String?> repeatRule = const Value.absent(),
                 Value<int?> repeatDone = const Value.absent(),
+                Value<int?> remindOffset = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String> fieldTs = const Value.absent(),
@@ -2665,6 +2739,7 @@ class $$TasksTableTableManager
                 repeatInterval: repeatInterval,
                 repeatRule: repeatRule,
                 repeatDone: repeatDone,
+                remindOffset: remindOffset,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,
@@ -2686,6 +2761,7 @@ class $$TasksTableTableManager
                 Value<int?> repeatInterval = const Value.absent(),
                 Value<String?> repeatRule = const Value.absent(),
                 Value<int?> repeatDone = const Value.absent(),
+                Value<int?> remindOffset = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<String> fieldTs = const Value.absent(),
@@ -2705,6 +2781,7 @@ class $$TasksTableTableManager
                 repeatInterval: repeatInterval,
                 repeatRule: repeatRule,
                 repeatDone: repeatDone,
+                remindOffset: remindOffset,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 fieldTs: fieldTs,

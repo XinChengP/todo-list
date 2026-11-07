@@ -32,6 +32,8 @@ export const TABLES: Record<string, TableSpec> = {
       repeat_rule: { kind: 'text', maxLen: 512 },
       // 该周期已完成的次数（用于「共 N 次」）
       repeat_done: { kind: 'int' },
+      // 到点提醒：提前分钟数（null = 关闭）
+      remind_offset: { kind: 'int' },
     },
   },
   // 完成日志：统计/连续天数用，与任务同样走字段级 LWW

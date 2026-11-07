@@ -31,6 +31,8 @@ class Tasks extends Table {
   TextColumn get repeatRule => text().named('repeat_rule').nullable()();
   /// 该周期任务已完成的次数（用于「共 N 次」结束条件）
   IntColumn get repeatDone => integer().named('repeat_done').nullable()();
+  /// 到点提醒：提前多少分钟（null = 关闭）。绝对提醒时间由 due_at - offset 推导
+  IntColumn get remindOffset => integer().named('remind_offset').nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
   /// JSON：{ "字段名": 该字段最后一次写入的毫秒时间戳 }，与服务端 field_ts 同构
