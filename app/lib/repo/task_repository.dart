@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../db/database.dart';
 import '../db/sync_fields.dart';
+import '../plugins/events.dart';
 import 'reminder_time.dart';
 import 'repeat.dart';
 
@@ -37,6 +39,19 @@ class TaskRepository {
 
   final AppDatabase _db;
   static const Uuid _uuid = Uuid();
+
+  /// 任务事件流（广播）：插件/webhook 在这里订阅。
+  /// 事件在写入完成后发出，task 快照是落库后的最终状态。
+  final _events = StreamController<TaskEvent>.broadcast();
+  Stream<TaskEvent> get events => _events.stream;
+
+  Future<void> _emit(TaskEventType type, String id) async {
+    try {
+      final t = await _db.getTaskById(id);
+      if (t == null) return;
+      _events.add(TaskEvent(type, t, nowMs()));
+    } catch (_) {}
+  }
 
   /// 监听未删除的任务，按 [filter] 过滤
   Stream<List<Task>> watch({TaskFilter filter = TaskFilter.all}) {
@@ -111,7 +126,9 @@ class TaskRepository {
             dirty: const Value(true),
           ),
         );
-    return (await _db.getTaskById(id))!;
+    final task = (await _db.getTaskById(id))!;
+    unawaited(_emit(TaskEventType.created, id));
+    return task;
   }
 
   /// 任务当前的周期规则（新字段优先，回退旧字段）
@@ -197,6 +214,7 @@ class TaskRepository {
           dirty: const Value(true),
         ),
       );
+      unawaited(_emit(TaskEventType.completed, t.id));
       return ended ? null : next.millisecondsSinceEpoch;
     }
 
@@ -207,6 +225,7 @@ class TaskRepository {
       updatedAt: Value(now),
       dirty: const Value(true),
     ));
+    unawaited(_emit(done ? TaskEventType.completed : TaskEventType.uncompleted, t.id));
     return null;
   }
 
@@ -366,11 +385,19 @@ class TaskRepository {
   Future<void> setList(Task t, String? listId) => _editField(t, 'list_id', (c) => c.copyWith(listId: Value(listId)));
 
   /// 软删除：写 deleted_at 墓碑，行保留（同步契约）
-  Future<void> delete(Task t) => _editField(t, 'deleted_at', (c) => c.copyWith(deletedAt: Value(nowMs())));
+  Future<void> delete(Task t) async {
+    // 删除本身就是事件，不需要再发一条 updated（避免接收端收到两次通知）
+    await _editField(t, 'deleted_at', (c) => c.copyWith(deletedAt: Value(nowMs())),
+        emitUpdated: false);
+    unawaited(_emit(TaskEventType.deleted, t.id));
+  }
 
   /// 撤销删除：清掉墓碑（清除同样盖新时间戳，LWW 语义保证撤销赢过删除）
-  Future<void> restore(Task t) =>
-      _editField(t, 'deleted_at', (c) => c.copyWith(deletedAt: const Value<int?>(null)));
+  Future<void> restore(Task t) async {
+    await _editField(t, 'deleted_at', (c) => c.copyWith(deletedAt: const Value<int?>(null)),
+        emitUpdated: false);
+    unawaited(_emit(TaskEventType.restored, t.id));
+  }
 
   // ---- 清单 ----
 
@@ -449,7 +476,8 @@ class TaskRepository {
 
   /// 单字段写入的公共路径：在字段列变化之上合并盖时间戳 + 置 dirty + 推进 updated_at。
   /// 三件套与字段列必须一次 write 落库，缺一不可（否则该修改永远不会同步）。
-  Future<void> _editField(Task t, String field, TasksCompanion Function(TasksCompanion c) apply) async {
+  Future<void> _editField(Task t, String field, TasksCompanion Function(TasksCompanion c) apply,
+      {bool emitUpdated = true}) async {
     final now = nowMs();
     final fts = _nextTs(t, {field: now});
     final companion = apply(
@@ -460,6 +488,7 @@ class TaskRepository {
       ),
     );
     await _write(t.id, companion);
+    if (emitUpdated) unawaited(_emit(TaskEventType.updated, t.id));
   }
 
   Future<void> _write(String id, TasksCompanion c) async {

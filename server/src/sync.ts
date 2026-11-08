@@ -174,6 +174,14 @@ export async function pull(db: D1Database, since: number) {
   return body
 }
 
+/** 开放只读接口：列出所有未删除任务（最新改动在前），供外部脚本/插件消费 */
+export async function listTasks(db: D1Database) {
+  const { results } = await db
+    .prepare(`SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY updated_at DESC`)
+    .all();
+  return (results as unknown as StoredRow[]).map((r) => assemble(r, 'tasks'));
+}
+
 /** 全量导出（备份/调试用），无游标语义 */
 export async function exportAll(db: D1Database) {
   const out: Record<string, unknown> = { ok: true, exported_at: Date.now() }

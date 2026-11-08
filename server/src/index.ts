@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { exportAll, pull, pushAll, syncCombined } from './sync'
+import { exportAll, listTasks, pull, pushAll, syncCombined } from './sync'
 import { HttpError, type Env } from './types'
 
 const app = new Hono<{ Bindings: Env }>()
@@ -38,7 +38,7 @@ app.get('/', (c) => {
   <p>服务器时间：${now}　版本：v${SERVER_VERSION}</p>
   <ul>
     <li><a href="/health">/health</a> — 健康检查（JSON）</li>
-    <li>/v1/sync · /v1/sync/pull · /v1/sync/push · /v1/export — 同步接口（需令牌）</li>
+    <li>/v1/sync · /v1/sync/pull · /v1/sync/push · /v1/tasks · /v1/export — 同步接口（需令牌）</li>
   </ul>
   <p style="color:#667">手机浏览器打开本页能看到这个 ✅，说明该设备的网络可以连通服务。</p>
 </body></html>`)
@@ -46,7 +46,7 @@ app.get('/', (c) => {
 
 // 未匹配路径：JSON 404（保持 API 一致性），并提示可用路径
 app.notFound((c) =>
-  c.json({ ok: false, error: 'not found', hint: '可用路径：/health、/v1/sync、/v1/sync/pull、/v1/sync/push、/v1/export' }, 404),
+  c.json({ ok: false, error: 'not found', hint: '可用路径：/health、/v1/sync、/v1/sync/pull、/v1/sync/push、/v1/tasks、/v1/export' }, 404),
 )
 
 /** 恒时比较，避免令牌校验的时序侧信道 */
@@ -93,6 +93,12 @@ app.post('/v1/sync', async (c) => {
   if (!Number.isFinite(since) || since < 0) throw new HttpError(400, 'since 必须是非负数字')
   return c.json(await syncCombined(c.env.DB, obj, Math.floor(since)))
 })
+
+/**
+ * 开放只读接口：列出所有未删除任务（协议行格式，与 pull 相同）。
+ * 给外部脚本/自建插件消费，只读、无副作用。
+ */
+app.get('/v1/tasks', async (c) => c.json({ ok: true, tasks: await listTasks(c.env.DB) }))
 
 app.get('/v1/export', async (c) => c.json(await exportAll(c.env.DB)))
 

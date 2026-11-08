@@ -14,6 +14,8 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../db/database.dart' show Task;
+import '../plugins/plugin_api.dart';
+import '../plugins/webhook_plugin.dart';
 import '../providers.dart';
 import '../reminders.dart';
 import '../repo/quick_add.dart';
@@ -65,6 +67,9 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.read(syncControllerProvider.notifier).run(auto: true);
       // 桌面卡片勾选的周期任务只写了 completed_at，这里补推进到下一次
       _reconcileRecurring();
+      // 插件宿主：注册内置 Webhook 插件并订阅任务事件（幂等）
+      PluginHost.register(WebhookPlugin(ref.read(databaseProvider)));
+      unawaited(PluginHost.init(ref.read(taskRepoProvider)));
     });
     if (_isAndroid) {
       WidgetsBinding.instance.addObserver(this);

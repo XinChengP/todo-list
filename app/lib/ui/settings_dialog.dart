@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers.dart';
 import '../repo/repeat.dart';
+import 'plugins_dialog.dart';
 import 'stats_dialog.dart';
 import '../win32_autostart.dart';
 
-const kAppVersion = '1.2.1'; // 与 pubspec.yaml 的 version 保持一致
+const kAppVersion = '1.3.0'; // 与 pubspec.yaml 的 version 保持一致
 const kDefaultBaseUrl = 'https://todoapi.example.com';
 const kDefaultFallbackUrls = 'https://todoapi.example.com:8443';
 // kDefaultDirectIp 来自 providers.dart
@@ -161,6 +162,13 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
                 title: const Text('统计与回顾'),
                 subtitle: const Text('今天/近 7 天/本月完成数、连续天数'),
                 onTap: () => showStatsDialog(context, ref),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.extension_outlined, size: 20),
+                title: const Text('插件与自动化'),
+                subtitle: const Text('Webhook 推送：任务事件发到你的地址'),
+                onTap: () => showPluginsDialog(context, ref),
               ),
               const SizedBox(height: 4),
               // 逾期策略：勾选周期任务时怎么安排下一次
