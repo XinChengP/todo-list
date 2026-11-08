@@ -56,6 +56,8 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
         await me.setWindowMethodHandler((call) async {
           if (call.method == 'show') {
             await _show();
+          } else if (call.method == 'hide') {
+            await _hide();
           } else if (call.method == 'refresh') {
             await _load();
           }
@@ -98,6 +100,13 @@ class _FloatWindowAppState extends State<FloatWindowApp> {
     _timer?.cancel(); // 隐藏即停轮询（不等系统事件）
     try {
       await (await _currentController()).hide();
+    } catch (_) {}
+    // 通知主窗口：悬浮窗已隐藏（主窗口顶栏的开关按钮要回到"未显示"态）
+    try {
+      final mainId = await _mainWindowId();
+      if (mainId != null) {
+        await WindowController.fromWindowId(mainId).invokeMethod('floatHidden');
+      }
     } catch (_) {}
   }
 

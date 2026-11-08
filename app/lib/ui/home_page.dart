@@ -48,6 +48,7 @@ class _HomePageState extends ConsumerState<HomePage>
   StreamSubscription<Uri?>? _widgetClickSub;
   DateTime? _lastResumeSync;
   bool _searching = false;
+  bool _floatVisible = false; // 悬浮窗当前是否可见（含被它自己的 ✕ 关闭的情况）
   final _searchController = TextEditingController();
 
   bool get _isWindows =>
@@ -113,7 +114,12 @@ class _HomePageState extends ConsumerState<HomePage>
         try {
           final me = await WindowController.fromCurrentEngine();
           await me.setWindowMethodHandler((call) async {
-            if (call.method == 'refresh') ref.invalidate(allTasksProvider);
+            if (call.method == 'refresh') {
+              ref.invalidate(allTasksProvider);
+            } else if (call.method == 'floatHidden') {
+              // 悬浮窗点 ✕ 后告知主窗口，顶栏开关状态要同步
+              if (mounted) setState(() => _floatVisible = false);
+            }
             return null;
           });
         } catch (_) {
@@ -334,6 +340,9 @@ class _HomePageState extends ConsumerState<HomePage>
 
   /// 打开/聚焦悬浮窗。数据库绝对路径随窗口参数传入
   /// （子引擎不注册任何 Flutter 插件，必须避免它自己解析路径）。
+  /// 显示/隐藏悬浮窗（顶栏按钮与托盘菜单共用）。
+  /// 数据库绝对路径随窗口参数传入（子引擎不注册任何 Flutter 插件，
+  /// 必须避免它自己解析路径）。
   Future<void> _toggleFloatWindow() async {
     if (_floatController == null) {
       final docs = await getApplicationDocumentsDirectory();
@@ -345,13 +354,25 @@ class _HomePageState extends ConsumerState<HomePage>
       );
       _floatController = controller;
       await controller.show();
+      _floatVisible = true;
+    } else if (_floatVisible) {
+      try {
+        await _floatController!.invokeMethod('hide');
+        _floatVisible = false;
+      } catch (_) {
+        _floatController = null; // 悬浮窗已被销毁，下次重建
+        _floatVisible = false;
+      }
     } else {
       try {
         await _floatController!.invokeMethod('show');
+        _floatVisible = true;
       } catch (_) {
         _floatController = null; // 悬浮窗已被销毁，下次重建
+        _floatVisible = false;
       }
     }
+    if (mounted) setState(() {}); // 刷新顶栏图标状态
   }
 
   /// 删除（软删除）+ 撤销入口
@@ -451,8 +472,10 @@ class _HomePageState extends ConsumerState<HomePage>
           if (_isWindows)
             IconButton(
               onPressed: _toggleFloatWindow,
-              tooltip: '悬浮窗（桌面常驻）',
+              tooltip: _floatVisible ? '隐藏悬浮窗' : '显示悬浮窗',
+              isSelected: _floatVisible,
               icon: const Icon(Icons.picture_in_picture_alt_outlined),
+              selectedIcon: const Icon(Icons.picture_in_picture),
             ),
           // 同步状态只在按钮内部订阅：一次同步会切换 syncing→success 两次状态，
           // 挂在 build 顶层会让整张任务列表跟着重建两遍
