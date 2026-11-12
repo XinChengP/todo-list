@@ -20,6 +20,7 @@ const kTaskFields = [
   'repeat_rule',
   'repeat_done',
   'remind_offset',
+  'sort_order',
 ];
 const kListFields = ['name', 'sort_order', 'deleted_at'];
 
@@ -53,6 +54,7 @@ Object? _localValue(Task t, String f) => switch (f) {
       'repeat_rule' => t.repeatRule,
       'repeat_done' => t.repeatDone,
       'remind_offset' => t.remindOffset,
+      'sort_order' => t.sortOrder,
       _ => null,
     };
 
@@ -114,6 +116,7 @@ TasksCompanion applyTaskField(TasksCompanion c, String f, Object? v) =>
       'repeat_rule' => c.copyWith(repeatRule: Value(v as String?)),
       'repeat_done' => c.copyWith(repeatDone: Value((v as num?)?.toInt())),
       'remind_offset' => c.copyWith(remindOffset: Value((v as num?)?.toInt())),
+      'sort_order' => c.copyWith(sortOrder: Value((v as num?)?.toInt())),
       _ => throw StateError('tasks 未知字段：$f'),
     };
 

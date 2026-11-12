@@ -34,6 +34,32 @@ List<Task> filterTasks(List<Task> rows, TaskFilter filter) {
 /// 所有写操作都按"字段级"记账：改了哪些可同步字段，就在 field_ts 里给哪些
 /// 字段盖上当前毫秒时间戳并置 dirty —— M3 同步层因此能直接从行数据构造
 /// 推送 payload，并与服务器的字段级 Last-Write-Wins 对齐。
+/// 一次完成的回执：撤销本次打卡需要它
+class CompletionResult {
+  const CompletionResult({
+    this.nextDue,
+    this.logId,
+    this.previousDue,
+    this.previousDoneCount,
+    this.ended = false,
+  });
+
+  /// 周期任务推进后的新截止时间（结束/非周期为 null）
+  final int? nextDue;
+
+  /// 本次写入的完成日志 id（撤销时删掉）
+  final String? logId;
+
+  /// 完成前的截止时间
+  final int? previousDue;
+
+  /// 完成前的打卡次数
+  final int? previousDoneCount;
+
+  /// 周期是否因达到结束条件而终止
+  final bool ended;
+}
+
 class TaskRepository {
   TaskRepository(this._db);
 
@@ -164,7 +190,7 @@ class TaskRepository {
   /// 周期任务：**原地滚到下一次**，同时写一条完成日志、累加 repeat_done；
   /// 达到「共 N 次 / 至某日」后自动结束重复，并把这一次正常标记为已完成。
   /// 返回推进后的新 dueAt（非周期或周期结束返回 null）。
-  Future<int?> setCompleted(Task t, {required bool done}) async {
+  Future<CompletionResult> setCompleted(Task t, {required bool done}) async {
     final now = nowMs();
     final rule = ruleOf(t);
 
@@ -181,7 +207,7 @@ class TaskRepository {
       final ended = overMax || overUntil || next == null;
 
       // 日志：记录"这一次完成"
-      await _logCompletion(t, now);
+      final logId = await _logCompletion(t, now);
 
       final fts = _nextTs(t, {
         'completed_at': now,
@@ -215,7 +241,13 @@ class TaskRepository {
         ),
       );
       unawaited(_emit(TaskEventType.completed, t.id));
-      return ended ? null : next.millisecondsSinceEpoch;
+      return CompletionResult(
+        nextDue: ended ? null : next.millisecondsSinceEpoch,
+        logId: logId,
+        previousDue: t.dueAt,
+        previousDoneCount: t.repeatDone ?? 0,
+        ended: ended,
+      );
     }
 
     final fts = _nextTs(t, {'completed_at': now});
@@ -225,8 +257,102 @@ class TaskRepository {
       updatedAt: Value(now),
       dirty: const Value(true),
     ));
-    unawaited(_emit(done ? TaskEventType.completed : TaskEventType.uncompleted, t.id));
-    return null;
+    if (done) {
+      // 普通任务也记日志：统计页的"今天/本月完成数"因此覆盖全部任务
+      final logId = await _logCompletion(t, now);
+      unawaited(_emit(TaskEventType.completed, t.id));
+      return CompletionResult(
+          logId: logId, previousDue: t.dueAt, previousDoneCount: t.repeatDone);
+    }
+    // 取消完成：把最近一条日志作废，避免统计虚高
+    await _tombstoneLatestLog(t.id, now);
+    unawaited(_emit(TaskEventType.uncompleted, t.id));
+    return const CompletionResult();
+  }
+
+  /// 撤销本次打卡/完成：恢复截止时间与完成状态，作废那条日志
+  Future<void> undoCompletion(Task t, CompletionResult r) async {
+    final now = nowMs();
+    final fts = _nextTs(t, {
+      'due_at': now,
+      'completed_at': now,
+      if (r.previousDoneCount != null) 'repeat_done': now,
+    });
+    await _write(
+      t.id,
+      TasksCompanion(
+        dueAt: Value(r.previousDue),
+        completedAt: const Value<int?>(null),
+        repeatDone: Value(r.previousDoneCount),
+        fieldTs: Value(fts.encode()),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+    if (r.logId != null) await _tombstoneLog(r.logId!, now);
+    unawaited(_emit(TaskEventType.updated, t.id));
+  }
+
+  Future<void> _tombstoneLatestLog(String taskId, int at) async {
+    final row = await (_db.select(_db.taskLogs)
+          ..where((l) => l.taskId.equals(taskId) & l.deletedAt.isNull())
+          ..orderBy([(l) => OrderingTerm(expression: l.completedAt, mode: OrderingMode.desc)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (row != null) await _tombstoneLog(row.id, at);
+  }
+
+  Future<void> _tombstoneLog(String logId, int at) async {
+    final row = await (_db.select(_db.taskLogs)..where((l) => l.id.equals(logId)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final fts = FieldTs.parse(row.fieldTs).withWrites({'deleted_at': at});
+    await (_db.update(_db.taskLogs)..where((l) => l.id.equals(logId))).write(
+      TaskLogsCompanion(
+        deletedAt: Value(at),
+        fieldTs: Value(fts.encode()),
+        updatedAt: Value(at),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  /// 手动排序：按传入顺序重写 sort_order（只写变化的行，事务内完成）
+  Future<void> reorder(List<String> orderedIds) async {
+    final now = nowMs();
+    await _db.transaction(() async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        final id = orderedIds[i];
+        final row = await _db.getTaskById(id);
+        if (row == null || row.sortOrder == i) continue;
+        final fts = _nextTs(row, {'sort_order': now});
+        await _write(
+          id,
+          TasksCompanion(
+            sortOrder: Value(i),
+            fieldTs: Value(fts.encode()),
+            updatedAt: Value(now),
+            dirty: const Value(true),
+          ),
+        );
+      }
+    });
+  }
+
+  /// 手动排序模式（本地设置，不参与同步）
+  static const sortManualKey = 'sort_manual';
+
+  Future<bool> isManualSort() async {
+    final row = await (_db.select(_db.settings)
+          ..where((s) => s.key.equals(sortManualKey)))
+        .getSingleOrNull();
+    return row?.value == '1';
+  }
+
+  Future<void> setManualSort(bool on) async {
+    await _db.into(_db.settings).insertOnConflictUpdate(
+          SettingsCompanion.insert(key: sortManualKey, value: on ? '1' : '0'),
+        );
   }
 
   DateTime? _nextWithPolicy(RepeatRule r, DateTime from, DateTime now, RepeatCatchup p) {
@@ -269,7 +395,8 @@ class TaskRepository {
     return next.millisecondsSinceEpoch;
   }
 
-  Future<void> _logCompletion(Task t, int at) async {
+  Future<String> _logCompletion(Task t, int at) async {
+    final logId = _uuid.v7();
     final fts = FieldTs.empty.withWrites({
       'task_id': at,
       'title': at,
@@ -278,7 +405,7 @@ class TaskRepository {
     });
     await _db.into(_db.taskLogs).insert(
           TaskLogsCompanion.insert(
-            id: _uuid.v7(),
+            id: logId,
             taskId: t.id,
             title: Value(t.title),
             dueAt: Value(t.dueAt),
@@ -289,6 +416,7 @@ class TaskRepository {
             dirty: const Value(true),
           ),
         );
+    return logId;
   }
 
   /// 设置/清除周期规则（null = 不重复）

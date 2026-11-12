@@ -42,22 +42,35 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     super.dispose();
   }
 
+  /// 先选日期，再选具体时间（取消时间 = 只选日期，不设时分）
   Future<void> _pickDue() async {
     final initial = _dueAt != null
         ? DateTime.fromMillisecondsSinceEpoch(_dueAt!)
         : DateTime.now();
-    final picked = await showDatePicker(
+    final date = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (picked != null) {
-      setState(() {
-        _dueAt =
-            DateTime(picked.year, picked.month, picked.day).millisecondsSinceEpoch;
-      });
-    }
+    if (date == null || !mounted) return;
+
+    final keepTime = _dueAt != null && hasTimeOfDay(_dueAt!);
+    final time = await showTimePicker(
+      context: context,
+      helpText: '选择截止时间（取消 = 仅日期）',
+      initialTime: TimeOfDay(
+        hour: keepTime ? initial.hour : 9,
+        minute: keepTime ? initial.minute : 0,
+      ),
+    );
+    final h = time?.hour ?? 0;
+    final m = time?.minute ?? 0;
+    if (!mounted) return;
+    setState(() {
+      _dueAt = DateTime(date.year, date.month, date.day, h, m)
+          .millisecondsSinceEpoch;
+    });
   }
 
   Future<void> _save() async {

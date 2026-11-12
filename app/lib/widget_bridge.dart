@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'db/database.dart';
 import 'db/sync_fields.dart';
 import 'repo/repeat.dart';
-import 'ui/format.dart' show isOverdue;
+import 'ui/format.dart' show dueShort, isOverdue;
 
 /// 荣耀/MagicOS 服务卡片的数据桥：
 /// 任务变化时把"未完成任务快照"写进 home_widget 的
@@ -109,7 +109,7 @@ class WidgetBridge {
 
   static String _dueLabel(int? ms) {
     if (ms == null) return '';
-    final d = DateTime.fromMillisecondsSinceEpoch(ms);
-    return '${d.month}/${d.day}';
+    // 带具体时间时卡片上也能看到（11/5 18:30）
+    return dueShort(ms);
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../db/database.dart' show TaskLog;
 import '../providers.dart';
 
 /// 统计与回顾：基于完成日志（同步来的，多端一致）
@@ -190,7 +189,3 @@ class _Metric extends StatelessWidget {
   }
 }
 
-/// 完成日志流（统计页用）
-final repoLogsProvider = StreamProvider<List<TaskLog>>((ref) {
-  return ref.watch(taskRepoProvider).watchLogs();
-});

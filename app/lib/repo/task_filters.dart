@@ -105,3 +105,19 @@ Map<String, int> activeCountByList(List<Task> rows) {
   }
   return out;
 }
+
+/// 手动排序：按 sort_order 升序；未设置（null）的排后面，
+/// 并保持它们原有的相对顺序（输入已经按智能规则排好）
+List<Task> sortManual(List<Task> rows) {
+  final indexed = [for (var i = 0; i < rows.length; i++) (rows[i], i)];
+  indexed.sort((a, b) {
+    final ao = a.$1.sortOrder;
+    final bo = b.$1.sortOrder;
+    if (ao == null && bo == null) return a.$2 - b.$2;
+    if (ao == null) return 1;
+    if (bo == null) return -1;
+    final c = ao.compareTo(bo);
+    return c != 0 ? c : a.$2 - b.$2;
+  });
+  return [for (final e in indexed) e.$1];
+}

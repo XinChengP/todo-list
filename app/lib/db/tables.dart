@@ -33,6 +33,8 @@ class Tasks extends Table {
   IntColumn get repeatDone => integer().named('repeat_done').nullable()();
   /// 到点提醒：提前多少分钟（null = 关闭）。绝对提醒时间由 due_at - offset 推导
   IntColumn get remindOffset => integer().named('remind_offset').nullable()();
+  /// 手动排序序号（越小越靠前；null = 未参与手动排序）
+  IntColumn get sortOrder => integer().named('sort_order').nullable()();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
   /// JSON：{ "字段名": 该字段最后一次写入的毫秒时间戳 }，与服务端 field_ts 同构

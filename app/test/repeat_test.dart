@@ -139,9 +139,9 @@ void main() {
 
       final after = (await db.getTaskById(t.id))!;
       expect(after.completedAt, isNull, reason: '周期任务滚到下一次');
-      expect(next, isNotNull);
+      expect(next.nextDue, isNotNull);
       expect(after.repeatDone, 1);
-      expect(after.dueAt, next);
+      expect(after.dueAt, next.nextDue);
       expect((await db.select(db.tasks).get()).length, 1, reason: '不产生历史任务行');
 
       final logs = await db.select(db.taskLogs).get();
@@ -157,13 +157,13 @@ void main() {
         repeat: const RepeatRule(unit: 'day', n: 1, max: 2),
       );
       final r1 = await repo.setCompleted(t, done: true);
-      expect(r1, isNotNull);
+      expect(r1.nextDue, isNotNull);
 
       final t2 = (await db.getTaskById(t.id))!;
       final r2 = await repo.setCompleted(t2, done: true);
 
       final after = (await db.getTaskById(t.id))!;
-      expect(r2, isNull, reason: '达到次数上限不再返回下一次');
+      expect(r2.nextDue, isNull, reason: '达到次数上限不再返回下一次');
       expect(after.completedAt, isNotNull, reason: '这一次应当正常完成');
       expect(after.repeatRule, isNull, reason: '规则已清除');
       expect(after.repeatDone, 2);
@@ -214,7 +214,7 @@ void main() {
       final next = await repo.setCompleted(t, done: true);
       expect(await repo.catchupPolicy(), RepeatCatchup.once);
       // 只前进一天 → 仍在过去
-      expect(next! < DateTime.now().millisecondsSinceEpoch, isTrue);
+      expect(next.nextDue! < DateTime.now().millisecondsSinceEpoch, isTrue);
     });
 
     test('旧字段仍可识别（无 repeat_rule 时回退）', () async {

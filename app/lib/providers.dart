@@ -30,6 +30,39 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 /// 默认隐藏：日常看板只关心待办，「已完成」页仍可查看历史
 final showCompletedProvider = StateProvider<bool>((ref) => false);
 
+/// 手动排序模式（本地设置；开启后列表可拖拽，顺序存 tasks.sort_order 参与同步）
+final manualSortProvider = StateProvider<bool>((ref) => false);
+
+/// 完成日志流（统计页 + 连续天数）
+final repoLogsProvider = StreamProvider<List<TaskLog>>((ref) {
+  return ref.watch(taskRepoProvider).watchLogs();
+});
+
+/// 每个任务"连续完成天数"（从今天或昨天往前数）
+final streakProvider = Provider<Map<String, int>>((ref) {
+  final logs = ref.watch(repoLogsProvider).valueOrNull ?? const <TaskLog>[];
+  final byTask = <String, Set<int>>{}; // taskId -> epochDay 集合
+  for (final l in logs) {
+    final d = DateTime.fromMillisecondsSinceEpoch(l.completedAt);
+    byTask.putIfAbsent(l.taskId, () => {}).add(
+        DateTime(d.year, d.month, d.day).millisecondsSinceEpoch);
+  }
+  final today = DateTime.now();
+  final today0 = DateTime(today.year, today.month, today.day).millisecondsSinceEpoch;
+  const day = 86400000;
+  final out = <String, int>{};
+  byTask.forEach((id, days) {
+    var cursor = days.contains(today0) ? today0 : today0 - day;
+    var n = 0;
+    while (days.contains(cursor)) {
+      n++;
+      cursor -= day;
+    }
+    if (n > 0) out[id] = n;
+  });
+  return out;
+});
+
 /// 快捷筛选条件（可多选，与状态/清单/搜索叠加）
 final quickFiltersProvider =
     StateProvider<Set<QuickFilter>>((ref) => const <QuickFilter>{});
@@ -56,16 +89,18 @@ final tasksProvider = Provider<AsyncValue<List<Task>>>((ref) {
   final query = ref.watch(searchQueryProvider);
   final quick = ref.watch(quickFiltersProvider);
   final hideCompleted = !ref.watch(showCompletedProvider);
-  return ref.watch(allTasksProvider).whenData(
-        (rows) => applyTaskFilters(
-          rows,
-          status: status,
-          listId: listId,
-          query: query,
-          quick: quick,
-          hideCompleted: hideCompleted,
-        ),
-      );
+  final manual = ref.watch(manualSortProvider);
+  return ref.watch(allTasksProvider).whenData((rows) {
+    final filtered = applyTaskFilters(
+      rows,
+      status: status,
+      listId: listId,
+      query: query,
+      quick: quick,
+      hideCompleted: hideCompleted,
+    );
+    return manual ? sortManual(filtered) : filtered;
+  });
 });
 
 /// 全部未完成任务（不受界面筛选影响）——荣耀卡片数据源

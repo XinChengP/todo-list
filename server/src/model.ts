@@ -34,6 +34,8 @@ export const TABLES: Record<string, TableSpec> = {
       repeat_done: { kind: 'int' },
       // 到点提醒：提前分钟数（null = 关闭）
       remind_offset: { kind: 'int' },
+      // 手动排序序号（越小越靠前）
+      sort_order: { kind: 'int' },
     },
   },
   // 完成日志：统计/连续天数用，与任务同样走字段级 LWW

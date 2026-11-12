@@ -67,6 +67,10 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.read(syncControllerProvider.notifier).run(auto: true);
       // 桌面卡片勾选的周期任务只写了 completed_at，这里补推进到下一次
       _reconcileRecurring();
+      // 读取手动排序开关（本地设置）
+      ref.read(taskRepoProvider).isManualSort().then((on) {
+        if (mounted) ref.read(manualSortProvider.notifier).state = on;
+      });
       // 插件宿主：注册内置 Webhook 插件并订阅任务事件（幂等）
       PluginHost.register(WebhookPlugin(ref.read(databaseProvider)));
       unawaited(PluginHost.init(ref.read(taskRepoProvider)));
@@ -248,16 +252,23 @@ class _HomePageState extends ConsumerState<HomePage>
 
   /// 勾选任务。周期任务完成后会滚到下一次，这里弹一条提示（新日期立刻可见）。
   Future<void> _toggle(TaskRepository repo, Task t, bool done) async {
-    final next = await repo.setCompleted(t, done: done);
-    if (!mounted) return;
-    if (next != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已完成，下次 ${dueLabel(next)}'),
-          duration: const Duration(seconds: 2),
+    final r = await repo.setCompleted(t, done: done);
+    if (!mounted || !done) return;
+    final next = r.nextDue;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(next != null
+            ? '已完成「${t.title}」，下次 ${dueLabel(next)}'
+            : (r.ended
+                ? '已完成「${t.title}」（周期结束）'
+                : '已完成「${t.title}」')),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => repo.undoCompletion(t, r),
         ),
-      );
-    }
+      ),
+    );
   }
 
   /// 切换搜索栏：关闭时清空关键字，避免"看不见但还在过滤"
@@ -285,6 +296,24 @@ class _HomePageState extends ConsumerState<HomePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('筛选', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: ref.read(manualSortProvider),
+                  title: const Text('手动排序（拖拽调整顺序）'),
+                  subtitle: const Text('顺序会同步到其它设备'),
+                  onChanged: (on) async {
+                    await ref.read(taskRepoProvider).setManualSort(on);
+                    ref.read(manualSortProvider.notifier).state = on;
+                    if (on) {
+                      // 用当前可视顺序播种 sort_order，拖拽立刻可用
+                      final rows = ref.read(tasksProvider).valueOrNull ?? const [];
+                      await ref.read(taskRepoProvider).reorder([for (final t in rows) t.id]);
+                    }
+                    if (ctx.mounted) Navigator.pop(ctx, null);
+                  },
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -380,6 +409,31 @@ class _HomePageState extends ConsumerState<HomePage>
     if (mounted) setState(() {}); // 刷新顶栏图标状态
   }
 
+  Widget _tile(TaskRepository repo, Task t, TaskFilter filter,
+      Map<String, String> listNames, int streak, bool manual, int? index) {
+    return TaskTile(
+      key: ValueKey(t.id),
+      task: t,
+      listName: filter == TaskFilter.all ? listNames[t.listId] : null,
+      streak: streak,
+      dragIndex: manual ? index : null,
+      onToggle: (done) => _toggle(repo, t, done),
+      onDelete: () => _deleteWithUndo(repo, t),
+      onTap: () => showEditTaskDialog(context, ref, t),
+    );
+  }
+
+  /// 拖拽排序：按可视顺序重写 sort_order（事务内、只写变化的行）
+  Future<void> _onReorder(
+      TaskRepository repo, List<Task> visible, int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final ids = [for (final t in visible) t.id];
+    if (oldIndex < 0 || oldIndex >= ids.length) return;
+    final moved = ids.removeAt(oldIndex);
+    ids.insert(newIndex.clamp(0, ids.length), moved);
+    await repo.reorder(ids);
+  }
+
   /// 删除（软删除）+ 撤销入口
   Future<void> _deleteWithUndo(TaskRepository repo, Task t) async {
     await repo.delete(t);
@@ -417,6 +471,8 @@ class _HomePageState extends ConsumerState<HomePage>
     final tasksAsync = ref.watch(tasksProvider);
     final repo = ref.watch(taskRepoProvider);
     final showCompleted = ref.watch(showCompletedProvider);
+    final manualSort = ref.watch(manualSortProvider);
+    final streaks = ref.watch(streakProvider);
     // "全部"视图下给每行标出所属清单（清单页内再标就重复了）
     final listNames = <String, String>{
       for (final l in ref.watch(allListsProvider).valueOrNull ?? const [])
@@ -599,41 +655,50 @@ class _HomePageState extends ConsumerState<HomePage>
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: tasks.length,
-                      itemBuilder: (_, i) {
-                        final t = tasks[i];
-                        return TaskTile(
-                          task: t,
-                          listName: filter == TaskFilter.all
-                              ? listNames[t.listId]
-                              : null,
-                          onToggle: (done) => _toggle(repo, t, done),
-                          onDelete: () => _deleteWithUndo(repo, t),
-                          onTap: () => showEditTaskDialog(context, ref, t),
-                        );
-                      },
-                    ),
-            ),
-          ),
-          Padding(
-            // 底部叠加系统手势区高度，防导航键/手势条遮挡
-            padding: EdgeInsets.fromLTRB(
-                16, 4, 16, 12 + MediaQuery.paddingOf(context).bottom),
-            child: SegmentedButton<TaskFilter>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: TaskFilter.all, label: Text('全部')),
-                ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
-                ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
-              ],
-              selected: {filter},
-              onSelectionChanged: (s) =>
-                  ref.read(taskFilterProvider.notifier).state = s.first,
+                  : (manualSort
+                      ? ReorderableListView.builder(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          buildDefaultDragHandles: false,
+                          itemCount: tasks.length,
+                          onReorder: (oldIndex, newIndex) =>
+                              _onReorder(repo, tasks, oldIndex, newIndex),
+                          itemBuilder: (_, i) {
+                            final t = tasks[i];
+                            return _tile(repo, t, filter, listNames,
+                                streaks[t.id] ?? 0, manualSort, i);
+                          },
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemCount: tasks.length,
+                          itemBuilder: (_, i) {
+                            final t = tasks[i];
+                            return _tile(repo, t, filter, listNames,
+                                streaks[t.id] ?? 0, manualSort, null);
+                          },
+                        )),
             ),
           ),
         ],
+      ),
+      // 放在 bottomNavigationBar 而不是 body 末尾：
+      // SnackBar 会浮在它上方，不会挡住筛选按钮（删除撤销/完成提示都被挡过）
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: SegmentedButton<TaskFilter>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: TaskFilter.all, label: Text('全部')),
+              ButtonSegment(value: TaskFilter.active, label: Text('进行中')),
+              ButtonSegment(value: TaskFilter.done, label: Text('已完成')),
+            ],
+            selected: {filter},
+            onSelectionChanged: (s) =>
+                ref.read(taskFilterProvider.notifier).state = s.first,
+          ),
+        ),
       ),
       ),
     );

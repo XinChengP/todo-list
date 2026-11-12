@@ -17,12 +17,20 @@ class TaskTile extends StatelessWidget {
     required this.onDelete,
     required this.onTap,
     this.listName,
+    this.streak = 0,
+    this.dragIndex,
   });
 
   final Task task;
 
   /// 任务所属清单名（"全部"视图下显示；为空则不显示）
   final String? listName;
+
+  /// 连续完成天数（≥2 才显示 🔥N）
+  final int streak;
+
+  /// 手动排序模式下的行号（非 null 时显示拖拽把手）
+  final int? dragIndex;
 
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
@@ -89,6 +97,15 @@ class TaskTile extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 4),
                     child: Icon(Icons.flag, size: 17, color: flagColor),
                   ),
+                if (dragIndex != null)
+                  ReorderableDragStartListener(
+                    index: dragIndex!,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Icon(Icons.drag_indicator,
+                          size: 18, color: scheme.outline),
+                    ),
+                  ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   iconSize: 18,
@@ -129,6 +146,12 @@ class TaskTile extends StatelessWidget {
     }
     if (task.notes.isNotEmpty) {
       out.add(const _Pill(icon: Icons.notes, text: '', tone: _Tone.muted));
+    }
+    if (streak >= 2) {
+      out.add(_Pill(
+          icon: Icons.local_fire_department,
+          text: '$streak 天',
+          tone: _Tone.accent));
     }
     return out;
   }
