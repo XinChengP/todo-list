@@ -83,7 +83,7 @@ class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
     if (_priority != t.priority) repo.setPriority(t, _priority);
     if (_remindOffset != t.remindOffset) {
       await repo.setReminder(t, _remindOffset);
-      if (_remindOffset != null) await ReminderService.requestPermission();
+      if (_remindOffset != null) await ReminderService.requestPermissions();
     }
     if (_repeat?.encode() !=
         resolveRule(t.repeatRule, t.repeatUnit, t.repeatInterval)?.encode()) {

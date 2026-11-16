@@ -484,7 +484,8 @@ class _HomePageState extends ConsumerState<HomePage>
       next.whenData((tasks) {
         WidgetBridge.update(tasks);
         _notifyFloatRefresh();
-        // 任务/截止/提醒变化后重排系统通知（服务内部 1.5s 防抖）
+        // 有提醒任务时确保通知权限（每次启动最多问一次），再重排
+        ReminderService.ensureStartupPermissions(tasks);
         ReminderService.schedule(tasks);
       });
     });
