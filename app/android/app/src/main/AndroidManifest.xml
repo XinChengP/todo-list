@@ -50,6 +50,33 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 全屏闹钟：锁屏也能亮屏弹出、响铃、震动 -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme" />
+
+        <!-- 闹钟触发：拉起全屏闹钟界面 -->
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <!-- 开机/更新后恢复闹钟（AlarmManager 的闹钟重启后会丢） -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- 定时通知：插件在闹钟触发 / 开机后恢复时需要这两个 receiver -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"

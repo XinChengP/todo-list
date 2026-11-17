@@ -78,7 +78,7 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (Platform.isAndroid) ...[
-                      _kv('提醒方式', s.systemAlarm ? '系统闹钟（推荐）' : '应用通知'),
+                      _kv('提醒方式', s.systemAlarm ? '应用闹钟（全屏响铃）' : '应用通知'),
                       if (!s.systemAlarm) ...[
                         _row('通知权限', s.notificationsEnabled),
                         _row('精确闹钟', s.exactAlarmsAllowed),
@@ -151,10 +151,10 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     for (final t in const [
-                      'Android 用「系统闹钟」：到点由系统时钟 App 响铃/震动/全屏，最可靠',
-                      '系统闹钟是一次性的：周期任务的后续提醒在下次打开 App 时重新登记',
-                      '若显示"应用通知"：说明手机没有可用的闹钟应用，会退回通知方式',
-                      '退回通知时请允许：通知权限 + 闹钟和提醒（精确闹钟）',
+                      'Android 用系统闹钟 API（setAlarmClock）：Doze/省电模式下也准时',
+                      '到点会全屏亮起（锁屏也行）、循环响铃 + 震动，直到你点"知道了"',
+                      '可点「稍后 5 分钟」推迟；关机重启后会自动重新登记',
+                      '荣耀务必允许：设置 → 应用 → 任务清单 → 耗电管理 → 允许后台活动',
                     ])
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
@@ -164,8 +164,8 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                       ),
                     const SizedBox(height: 6),
                     Text(
-                      '提示：系统闹钟会出现在手机的「时钟 → 闹钟」列表里，'
-                      '可以直接在那里改时间或删掉；我们只负责按时登记它。',
+                      '提示：这是应用自己的闹钟，不会写进「时钟」App 的闹钟列表；'
+                      '响铃时按音量键只影响本次播放，不会改系统闹钟音量。',
                       style: theme.textTheme.labelSmall
                           ?.copyWith(color: theme.colorScheme.outline),
                     ),

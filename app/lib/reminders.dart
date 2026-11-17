@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart' show MethodChannel, PlatformException;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:local_notifier/local_notifier.dart';
@@ -229,7 +229,8 @@ class ReminderService {
       ..lastError = null
       ..usingInexact = false;
 
-    // Android：把提醒登记成**系统闹钟**（响铃/全屏/震动交给系统，最可靠）
+    // Android：用 AlarmManager.setAlarmClock 登记（系统认定的闹钟，
+    // Doze/省电模式下也准时；触发后拉起全屏 AlarmActivity 响铃震动）
     try {
       _status.systemAlarm = await _alarmChannel.invokeMethod<bool>('isSupported') ?? false;
     } catch (_) {
@@ -246,18 +247,21 @@ class ReminderService {
         completed: t.completedAt != null || t.deletedAt != null,
       );
       if (when == null || !when.isAfter(now) || when.isAfter(horizon)) continue;
-      if (scheduled >= 10) break; // 系统闹钟列表别塞太多，取最近的 10 个
+
 
       if (_status.systemAlarm) {
         try {
-          await _alarmChannel.invokeMethod<bool>('setAlarm', {
-            'hour': when.hour,
-            'minute': when.minute,
+          final ok = await _alarmChannel.invokeMethod<bool>('setAlarm', {
+            'atMs': when.millisecondsSinceEpoch,
             'label': t.title,
-            'skipUi': true,
+            'requestCode': _idFor(t.id),
+            'mirrorToClockApp': false,
           });
-          scheduled++;
-          continue;
+          if (ok == true) {
+            scheduled++;
+            continue;
+          }
+          _status.lastError = '系统闹钟登记失败';
         } catch (e) {
           _status.lastError = '系统闹钟登记失败：$e';
         }
@@ -298,19 +302,18 @@ class ReminderService {
     await refreshStatus();
     final supported = _status.systemAlarm;
     if (supported) {
-      final when = DateTime.now().add(const Duration(minutes: 1));
+      final when = DateTime.now().add(const Duration(seconds: 10));
       try {
         final ok = await _alarmChannel.invokeMethod<bool>('setAlarm', {
-          'hour': when.hour,
-          'minute': when.minute,
+          'atMs': when.millisecondsSinceEpoch,
           'label': '任务清单测试提醒',
-          'skipUi': true,
+          'requestCode': 424242,
         });
         return ok == true
-            ? '已登记系统闹钟：${when.hour}:${when.minute.toString().padLeft(2, '0')} 响铃'
-            : '登记系统闹钟失败';
+            ? '已登记闹钟：10 秒后全屏响铃（可锁屏测试）'
+            : '登记闹钟失败';
       } catch (e) {
-        return '登记系统闹钟失败：$e';
+        return '登记闹钟失败：$e';
       }
     }
     // 没有闹钟应用 → 立即弹通知验证通道
