@@ -19,5 +19,8 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        // 到点提醒直接交给系统闹钟（见 AlarmChannel 注释）
+        AlarmChannel.register(flutterEngine, this)
     }
 }

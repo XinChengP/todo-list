@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:local_notifier/local_notifier.dart';
@@ -19,18 +19,56 @@ class ReminderStatus {
   /// 是否允许精确闹钟（Android 12+ 需用户在系统设置里给"闹钟和提醒"权限）
   bool exactAlarmsAllowed = false;
 
-  /// 实际排上的条数
+  /// 实际登记到系统闹钟的条数
   int scheduled = 0;
+
+  /// Android 上是否走"系统闹钟"模式（而非自建通知）
+  bool systemAlarm = false;
 
   /// 是否因缺少精确闹钟权限而降级为"非精确"（仍会响，可能延迟几分钟）
   bool usingInexact = false;
+
+  /// 是否允许全屏弹出（Android 14+ 单独权限；没有也能弹横幅）
+  bool fullScreenAllowed = false;
 
   String timezone = '';
   String? lastError;
   int updatedAt = 0;
 }
 
-/// 到点提醒（Android 系统通知 / Windows 通知中心）
+// 渠道属性建过就固定，改配置必须换新 id（1.4.2 及之前的老渠道只有基础通知）
+const _channelId = 'todo_alarm_v2';
+
+/// 与 Kotlin 侧 AlarmChannel 通信（Android 走系统闹钟）
+const _alarmChannel = MethodChannel('todo/system_alarm');
+
+/// Android 闹钟通知的统一样式：高优先级 + 响铃 + 震动 + 全屏弹出 + 持续提醒，
+/// 这里集中一份，避免各处写法不一致（渠道属性建过就固定，改动必须换 channelId）
+AndroidNotificationDetails _alarmDetails({String? subText}) =>
+    AndroidNotificationDetails(
+      _channelId,
+      '到点闹钟',
+      channelDescription: '任务到点时的闹钟式提醒（响铃、震动、全屏）',
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.alarm,
+      // 响铃 + 震动（渠道首次创建时生效）
+      playSound: true,
+      enableVibration: true,
+      // 弹出式横幅，锁屏也可见
+      fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
+      // 用户没点掉就一直留在通知栏
+      ongoing: false,
+      autoCancel: true,
+      // 只响一次，不做循环闹钟（避免打扰；想更强可开 additionalFlags）
+      onlyAlertOnce: false,
+      ticker: '任务到点',
+      styleInformation: BigTextStyleInformation(''),
+      subText: subText,
+    );
+
+/// 到点提醒（Android 闹钟通知 / Windows 通知中心）
 ///
 /// 设计：
 /// - 数据只存 `remind_offset`（提前分钟数），绝对时刻由 `due_at - offset` 推导，
@@ -49,7 +87,7 @@ class ReminderService {
   static Timer? _debounce;
   static bool _hasScheduled = false;
   static bool _askedStartup = false;
-  static const _channelId = 'todo_reminders';
+
 
   static final ReminderStatus _status = ReminderStatus();
   static ReminderStatus get status => _status;
@@ -115,6 +153,7 @@ class ReminderService {
       _status.exactAlarmsAllowed =
           await android?.canScheduleExactNotifications() ?? false;
     } catch (_) {}
+
     _status.updatedAt = DateTime.now().millisecondsSinceEpoch;
     return _status;
   }
@@ -134,6 +173,9 @@ class ReminderService {
     if (askExact) {
       try {
         await android?.requestExactAlarmsPermission();
+      } catch (_) {}
+      try {
+        await android?.requestFullScreenIntentPermission();
       } catch (_) {}
     }
     await refreshStatus();
@@ -182,15 +224,18 @@ class ReminderService {
       _rescheduleWindows(tasks);
       return;
     }
-    // 每次重排前刷新能力：用户可能在系统设置里刚给了权限
     await refreshStatus();
     _status
       ..lastError = null
-      ..usingInexact = !_status.exactAlarmsAllowed;
+      ..usingInexact = false;
 
+    // Android：把提醒登记成**系统闹钟**（响铃/全屏/震动交给系统，最可靠）
     try {
-      await _plugin.cancelAll();
-    } catch (_) {}
+      _status.systemAlarm = await _alarmChannel.invokeMethod<bool>('isSupported') ?? false;
+    } catch (_) {
+      _status.systemAlarm = false;
+    }
+
     var scheduled = 0;
     final now = DateTime.now();
     final horizon = now.add(const Duration(days: 60));
@@ -201,64 +246,39 @@ class ReminderService {
         completed: t.completedAt != null || t.deletedAt != null,
       );
       if (when == null || !when.isAfter(now) || when.isAfter(horizon)) continue;
+      if (scheduled >= 10) break; // 系统闹钟列表别塞太多，取最近的 10 个
+
+      if (_status.systemAlarm) {
+        try {
+          await _alarmChannel.invokeMethod<bool>('setAlarm', {
+            'hour': when.hour,
+            'minute': when.minute,
+            'label': t.title,
+            'skipUi': true,
+          });
+          scheduled++;
+          continue;
+        } catch (e) {
+          _status.lastError = '系统闹钟登记失败：$e';
+        }
+      }
+
+      // 系统没有闹钟应用 → 退回自建通知
       try {
         await _plugin.zonedSchedule(
           _idFor(t.id),
           '该做「${t.title}」了',
-          t.repeatRule == null && t.repeatUnit == null
-              ? '点开查看任务清单'
-              : '周期任务 · 完成后自动排下一次',
+          '点开查看任务清单',
           tz.TZDateTime.from(when, tz.local),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              _channelId,
-              '到点提醒',
-              channelDescription: '任务截止时间提醒',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
+          NotificationDetails(android: _alarmDetails()),
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           androidScheduleMode: _scheduleMode,
           payload: t.id,
         );
         scheduled++;
-      } on PlatformException catch (e) {
-        // 缺少精确闹钟权限：降级为 inexact 再试一次（仍然会响，可能延迟）
-        if (e.code == 'exact_alarms_not_permitted') {
-          _status
-            ..exactAlarmsAllowed = false
-            ..usingInexact = true;
-          try {
-            await _plugin.zonedSchedule(
-              _idFor(t.id),
-              '该做「${t.title}」了',
-              '点开查看任务清单',
-              tz.TZDateTime.from(when, tz.local),
-              const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  _channelId,
-                  '到点提醒',
-                  channelDescription: '任务截止时间提醒',
-                  importance: Importance.high,
-                  priority: Priority.high,
-                ),
-              ),
-              uiLocalNotificationDateInterpretation:
-                  UILocalNotificationDateInterpretation.absoluteTime,
-              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-              payload: t.id,
-            );
-            scheduled++;
-          } catch (e2) {
-            _status.lastError = '排程失败：$e2';
-          }
-        } else {
-          _status.lastError = '排程失败（${e.code}）：${e.message}';
-        }
       } catch (e) {
-        _status.lastError = '排程失败：$e';
+        _status.lastError = '通知排程失败：$e';
       }
     }
     _status
@@ -267,54 +287,41 @@ class ReminderService {
     _hasScheduled = scheduled > 0;
   }
 
-  /// 立即排一条 5 秒后的测试通知（诊断用）
+  /// 诊断用：Android 登记 1 分钟后的系统闹钟；Windows 立即弹通知
   static Future<String> testNotification() async {
     await ensureInit();
-    if (!_ready) return '通知服务未初始化';
+    if (!_ready) return '提醒服务未初始化';
     if (Platform.isWindows) {
-      await LocalNotification(title: '测试提醒', body: '如果你看到这条，说明提醒正常')
-          .show();
+      await LocalNotification(title: '测试提醒', body: '看到这条说明提醒正常').show();
       return '已发出（Windows 通知中心）';
     }
     await refreshStatus();
-    try {
-      if (_status.exactAlarmsAllowed) {
-        await _plugin.zonedSchedule(
-          424242,
-          '测试提醒',
-          '看到这条说明提醒正常（5 秒后触发）',
-          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5)),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              _channelId,
-              '到点提醒',
-              channelDescription: '任务截止时间提醒',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
-        return '已排程：5 秒后弹出';
+    final supported = _status.systemAlarm;
+    if (supported) {
+      final when = DateTime.now().add(const Duration(minutes: 1));
+      try {
+        final ok = await _alarmChannel.invokeMethod<bool>('setAlarm', {
+          'hour': when.hour,
+          'minute': when.minute,
+          'label': '任务清单测试提醒',
+          'skipUi': true,
+        });
+        return ok == true
+            ? '已登记系统闹钟：${when.hour}:${when.minute.toString().padLeft(2, '0')} 响铃'
+            : '登记系统闹钟失败';
+      } catch (e) {
+        return '登记系统闹钟失败：$e';
       }
-      // 没有精确闹钟权限：直接弹一条，至少能验证通知通道是否可用
+    }
+    // 没有闹钟应用 → 立即弹通知验证通道
+    try {
       await _plugin.show(
         424242,
         '测试提醒',
-        '精确闹钟未开启，这次是立即弹出；请到系统设置允许"闹钟和提醒"',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            '到点提醒',
-            channelDescription: '任务截止时间提醒',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        ),
+        '系统无闹钟应用，已改用通知（请检查通知权限）',
+        NotificationDetails(android: _alarmDetails()),
       );
-      return '精确闹钟未开启：已立即弹出测试通知';
+      return '已立即弹出测试通知';
     } catch (e) {
       return '测试失败：$e';
     }

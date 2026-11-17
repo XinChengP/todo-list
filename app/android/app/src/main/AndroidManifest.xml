@@ -4,6 +4,9 @@
     <!-- 到点提醒：通知权限（Android 13+ 运行时申请）+ 精确闹钟 + 开机后恢复定时 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- 到点时全屏弹出（Android 14+ 需单独授权，见「提醒诊断 → 去授权」） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="任务清单"

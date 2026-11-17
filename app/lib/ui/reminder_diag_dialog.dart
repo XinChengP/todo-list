@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 
 import '../reminders.dart';
 
@@ -76,10 +77,16 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _row('通知权限', s.notificationsEnabled),
-                    _row('精确闹钟', s.exactAlarmsAllowed),
+                    if (Platform.isAndroid) ...[
+                      _kv('提醒方式', s.systemAlarm ? '系统闹钟（推荐）' : '应用通知'),
+                      if (!s.systemAlarm) ...[
+                        _row('通知权限', s.notificationsEnabled),
+                        _row('精确闹钟', s.exactAlarmsAllowed),
+                      ],
+                    ] else
+                      _row('通知权限', s.notificationsEnabled),
                     const SizedBox(height: 8),
-                    _kv('已排程', '${s.scheduled} 条'),
+                    _kv(s.systemAlarm ? '已登记闹钟' : '已排程', '${s.scheduled} 条'),
                     if (Platform.isAndroid) _kv('时区', s.timezone.isEmpty ? '未知' : s.timezone),
                     if (s.usingInexact)
                       Padding(
@@ -122,21 +129,32 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                         ),
                         FilledButton.tonalIcon(
                           onPressed: _busy ? null : _test,
-                          icon: const Icon(Icons.notifications, size: 16),
+                          icon: const Icon(Icons.alarm, size: 16),
                           label: const Text('测试提醒'),
                         ),
+                        if (Platform.isAndroid)
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                await const MethodChannel('todo/system_alarm')
+                                    .invokeMethod('openAlarmApp');
+                              } catch (_) {}
+                            },
+                            icon: const Icon(Icons.access_time, size: 16),
+                            label: const Text('打开系统闹钟'),
+                          ),
                       ],
                     ),
                     const Divider(height: 24),
-                    Text('荣耀 / MagicOS 还需要：',
+                    Text('提醒方式说明：',
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     for (final t in const [
-                      '设置 → 应用 → 任务清单 → 耗电管理：允许后台活动',
-                      '设置 → 应用 → 任务清单 → 自启动：打开',
-                      '设置 → 通知 → 任务清单：允许通知、开启横幅',
-                      '设置 → 应用 → 任务清单 → 权限：闹钟和提醒（精确闹钟）',
+                      'Android 用「系统闹钟」：到点由系统时钟 App 响铃/震动/全屏，最可靠',
+                      '系统闹钟是一次性的：周期任务的后续提醒在下次打开 App 时重新登记',
+                      '若显示"应用通知"：说明手机没有可用的闹钟应用，会退回通知方式',
+                      '退回通知时请允许：通知权限 + 闹钟和提醒（精确闹钟）',
                     ])
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
@@ -146,8 +164,8 @@ class _ReminderDiagDialogState extends State<_ReminderDiagDialog> {
                       ),
                     const SizedBox(height: 6),
                     Text(
-                      '说明：缺少"精确闹钟"时软件会自动降级为非精确提醒（仍会响，可能延迟）；'
-                      '如果上面两项都是"已开启"且测试能弹，但到点仍不响，多半是系统把后台进程冻结了。',
+                      '提示：系统闹钟会出现在手机的「时钟 → 闹钟」列表里，'
+                      '可以直接在那里改时间或删掉；我们只负责按时登记它。',
                       style: theme.textTheme.labelSmall
                           ?.copyWith(color: theme.colorScheme.outline),
                     ),
